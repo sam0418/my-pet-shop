@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PetFood Mart | 寵物食品專賣</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Firebase SDK (Modular) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, onValue, get };
+    </script>
+    
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Tailwind Config for Custom Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#F97316', // Orange-500
+                        secondary: '#10B981', // Emerald-500
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+<div id="app" class="flex flex-col min-h-screen">
+    
+    <!-- Navigation -->
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center cursor-pointer" @click="view = 'home'">
+                    <i class="fas fa-paw text-primary text-2xl mr-2"></i>
+                    <span class="font-bold text-xl tracking-tight">PetFood Mart</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <!-- Language Toggle -->
+                    <button @click="toggleLang" class="text-gray-600 hover:text-primary px-3 py-1 rounded border border-gray-300 text-sm">
+                        {{ lang === 'zh' ? 'EN' : '中文' }}
+                    </button>
+                    
+                    <!-- Admin Link -->
+                    <button @click="view = 'admin-login'" class="text-gray-600 hover:text-primary">
+                        <i class="fas fa-user-cog"></i>
+                    </button>
+                    
+                    <!-- Cart Icon -->
+                    <div class="relative cursor-pointer" @click="view = 'cart'">
+                        <i class="fas fa-shopping-cart text-gray-600 hover:text-primary text-xl"></i>
+                        <span v-if="cartCount > 0" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                            {{ cartCount }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+        <!-- Setup Warning -->
+        <div v-if="!isFirebaseConfigured" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
+            <p class="font-bold">尚未設定資料庫 / Database Not Configured</p>
+            <p>請打開 index.html 程式碼，找到 `const firebaseConfig` 並填入您的 Firebase 設定。</p>
+            <p>Please open the code and fill in your Firebase Config.</p>
+        </div>
+        
+        <!-- View: Home / Product List -->
+        <div v-if="view === 'home'">
+            <div v-if="isLoading" class="text-center py-10">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary"></i>
+                <p class="mt-2 text-gray-500">Loading Products...</p>
+            </div>
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">{{ t('products') }}</h2>
+                <div class="w-64">
+                    <input v-model="searchQuery" type="text" :placeholder="t('search')" class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div v-for="product in filteredProducts" :key="product.id" class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                    <div class="h-48 bg-gray-200 relative">
+                        <img :src="product.image || 'https://placehold.co/400x300?text=No+Image'" :alt="product.name" class="w-full h-full object-cover">
+                        <span v-if="product.discount > 0" class="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
+                            -{{ product.discount }}%
+                        </span>
+                    </div>
+                    <div class="p-4">
+                        <h3 class="text-lg font-semibold mb-1 truncate">{{ product.name }}</h3>
+                        <p class="text-gray-500 text-sm mb-2 h-10 overflow-hidden">{{ product.description }}</p>
+                        <div class="flex justify-between items-center mt-4">
+                            <div>
+                                <span class="text-primary font-bold text-lg">RM {{ calculatePrice(product) }}</span>
+                                <span v-if="product.discount > 0" class="text-gray-400 text-sm line-through ml-1">RM {{ product.price }}</span>
+                            </div>
+                            <button @click="addToCart(product)" :disabled="product.stock <= 0" class="bg-primary text-white px-3 py-1.5 rounded hover:bg-orange-600 transition disabled:bg-gray-300">
+                                <i class="fas fa-plus"></i> {{ t('add') }}
+                            </button>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-2">
+                            {{ t('stock') }}: {{ product.stock }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Cart & Checkout -->
+        <div v-if="view === 'cart'" class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold mb-6">{{ t('shoppingCart') }}</h2>
+            
+            <div v-if="cart.length === 0" class="text-center py-12 bg-white rounded-lg shadow">
+                <i class="fas fa-shopping-basket text-6xl text-gray-300 mb-4"></i>
+                <p class="text-gray-500">{{ t('emptyCart') }}</p>
+                <button @click="view = 'home'" class="mt-4 text-primary font-semibold hover:underline">{{ t('backToShop') }}</button>
+            </div>
+
+            <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Cart Items -->
+                <div class="lg:col-span-2 space-y-4">
+                    <div v-for="(item, index) in cart" :key="index" class="bg-white p-4 rounded-lg shadow flex items-center">
+                        <img :src="item.image || 'https://placehold.co/100x100'" class="w-20 h-20 object-cover rounded mr-4">
+                        <div class="flex-grow">
+                            <h3 class="font-semibold">{{ item.name }}</h3>
+                            <p class="text-sm text-gray-500">RM {{ item.finalPrice }}</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button @click="updateQuantity(index, -1)" class="text-gray-500 hover:text-primary"><i class="fas fa-minus-circle"></i></button>
+                            <span class="font-bold w-6 text-center">{{ item.quantity }}</span>
+                            <button @click="updateQuantity(index, 1)" class="text-gray-500 hover:text-primary"><i class="fas fa-plus-circle"></i></button>
+                            <button @click="removeFromCart(index)" class="text-red-500 hover:text-red-700 ml-4"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Checkout Summary -->
+                <div class="bg-white p-6 rounded-lg shadow h-fit">
+                    <h3 class="font-bold text-lg mb-4 border-b pb-2">{{ t('orderSummary') }}</h3>
+                    
+                    <!-- Shipping Method -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('shippingMethod') }}</label>
+                        <select v-model="order.shippingMethod" class="w-full border rounded p-2 text-sm">
+                            <option value="pickup">{{ t('selfPickup') }} (-3%)</option>
+                            <option value="delivery">{{ t('delivery') }}</option>
+                            <option value="custom">{{ t('customDelivery') }} ({{ t('selfPay') }})</option>
+                        </select>
+                    </div>
+
+                    <!-- Customer Info (For Delivery & Custom) -->
+                    <div v-if="['delivery', 'custom'].includes(order.shippingMethod)" class="space-y-3 mb-4 text-sm bg-gray-50 p-3 rounded border border-gray-200">
+                        <h4 class="font-bold text-gray-700 text-xs uppercase tracking-wide mb-2">{{ t('deliveryDetails') }}</h4>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">{{ t('name') }} <span class="text-red-500">*</span></label>
+                            <input v-model="order.name" type="text" :placeholder="t('name')" class="w-full border p-2 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">{{ t('phone') }} <span class="text-red-500">*</span></label>
+                            <input v-model="order.phone" type="text" :placeholder="t('phone')" class="w-full border p-2 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">{{ t('address') }} <span class="text-red-500">*</span></label>
+                            <textarea v-model="order.address" :placeholder="t('address')" class="w-full border p-2 rounded focus:ring-1 focus:ring-primary focus:border-primary" rows="2"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Price Breakdown -->
+                    <div class="space-y-2 text-sm mb-6">
+                        <div class="flex justify-between">
+                            <span>{{ t('subtotal') }}</span>
+                            <span>RM {{ cartSubtotal.toFixed(2) }}</span>
+                        </div>
+                        
+                        <div v-if="order.shippingMethod === 'pickup'" class="flex justify-between text-green-600">
+                            <span>{{ t('discountPickup') }} (3%)</span>
+                            <span>- RM {{ pickupDiscount.toFixed(2) }}</span>
+                        </div>
+                        
+                        <div v-if="order.shippingMethod === 'delivery'" class="flex justify-between">
+                            <span>{{ t('shippingFee') }}</span>
+                            <span v-if="isFreeShipping" class="text-green-600">{{ t('free') }}</span>
+                            <span v-else>RM {{ settings.shippingFee }}</span>
+                        </div>
+                        <div v-if="order.shippingMethod === 'custom'" class="flex justify-between">
+                            <span>{{ t('shippingFee') }}</span>
+                            <span>RM {{ settings.shippingFee }}</span>
+                        </div>
+
+                        <div class="flex justify-between font-bold text-lg pt-2 border-t">
+                            <span>{{ t('total') }}</span>
+                            <span>RM {{ cartTotal.toFixed(2) }}</span>
+                        </div>
+                        <div v-if="order.shippingMethod === 'delivery' && !isFreeShipping" class="text-xs text-gray-500 mt-1">
+                            {{ t('freeShippingOver') }} RM {{ settings.freeShippingThreshold }}
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="space-y-3">
+                        <button @click="sendToWhatsApp" class="w-full bg-green-500 text-white py-2 rounded font-bold hover:bg-green-600 transition flex items-center justify-center">
+                            <i class="fab fa-whatsapp mr-2"></i> {{ t('sendWhatsApp') }}
+                        </button>
+                        <button @click="generatePDF" class="w-full bg-gray-800 text-white py-2 rounded font-bold hover:bg-gray-900 transition flex items-center justify-center">
+                            <i class="fas fa-file-pdf mr-2"></i> {{ t('downloadPDF') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Admin Login -->
+        <div v-if="view === 'admin-login'" class="max-w-md mx-auto mt-10">
+            <div class="bg-white p-8 rounded-lg shadow-md">
+                <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Admin Login</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Username</label>
+                        <input v-model="loginForm.username" type="text" class="w-full border p-2 rounded mt-1">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Password</label>
+                        <input v-model="loginForm.password" type="password" class="w-full border p-2 rounded mt-1">
+                    </div>
+                    <button @click="handleLogin" class="w-full bg-primary text-white py-2 rounded font-bold hover:bg-orange-600">Login</button>
+                    <p class="text-xs text-gray-500 text-center">Hint: admin / admin</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Admin Dashboard -->
+        <div v-if="view === 'admin-dashboard'" class="max-w-6xl mx-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Admin Dashboard</h2>
+                <div class="space-x-2">
+                    <button @click="activeTab = 'products'" :class="{'bg-primary text-white': activeTab === 'products', 'bg-white text-gray-700': activeTab !== 'products'}" class="px-4 py-2 rounded shadow">{{ t('manageProducts') }}</button>
+                    <button @click="activeTab = 'settings'" :class="{'bg-primary text-white': activeTab === 'settings', 'bg-white text-gray-700': activeTab !== 'settings'}" class="px-4 py-2 rounded shadow">{{ t('settings') }}</button>
+                    <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded shadow">{{ t('logout') }}</button>
+                </div>
+            </div>
+
+            <!-- Products Tab -->
+            <div v-if="activeTab === 'products'">
+                <div class="mb-4 bg-white p-6 rounded shadow border border-gray-200">
+                    <h3 class="font-bold text-xl mb-4 text-gray-800 border-b pb-2 flex items-center">
+                        <i class="fas fa-box-open mr-2 text-primary"></i>
+                        {{ isEditing ? (lang === 'zh' ? '編輯商品資訊' : 'Edit Product Details') : (lang === 'zh' ? '新增商品' : 'Add New Product') }}
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Product Name -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                {{ t('prodName') }} <span class="text-red-500">*</span>
+                            </label>
+                            <input v-model="productForm.name" type="text" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" :placeholder="t('prodName')">
+                        </div>
+
+                        <!-- Price -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                {{ t('prodPrice') }} (RM) <span class="text-red-500">*</span>
+                            </label>
+                            <input v-model="productForm.price" type="number" min="0" step="0.01" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="0.00">
+                        </div>
+
+                        <!-- Stock -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                {{ t('prodStock') }} ({{ lang === 'zh' ? '數量' : 'Qty' }}) <span class="text-red-500">*</span>
+                            </label>
+                            <input v-model="productForm.stock" type="number" min="0" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="0">
+                        </div>
+
+                        <!-- Discount -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                {{ t('prodDiscount') }} (%)
+                            </label>
+                            <input v-model="productForm.discount" type="number" min="0" max="100" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="0">
+                        </div>
+
+                        <!-- Image Upload -->
+                        <div class="lg:col-span-2">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                {{ t('prodImage') }} (JPG/PNG)
+                            </label>
+                            <div class="flex items-start space-x-4">
+                                <div class="flex-grow">
+                                    <input type="file" @change="handleImageUpload" accept="image/jpeg, image/png" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-orange-600 mb-2 transition-all cursor-pointer"/>
+                                    <input v-model="productForm.image" type="text" :placeholder="t('prodImageURL')" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-sm text-gray-600">
+                                </div>
+                                <div v-if="productForm.image" class="w-24 h-24 border rounded overflow-hidden bg-gray-100 flex-shrink-0 relative group shadow-sm">
+                                    <img :src="productForm.image" class="w-full h-full object-cover">
+                                    <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer" @click="productForm.image = ''">
+                                        <i class="fas fa-trash text-white"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">{{ t('imageNote') }}</p>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="col-span-1 md:col-span-2 lg:col-span-3">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                {{ t('prodDesc') }}
+                            </label>
+                            <textarea v-model="productForm.description" rows="4" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all resize-none" :placeholder="t('prodDesc')"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex space-x-3 border-t pt-4 justify-end">
+                        <button v-if="isEditing" @click="resetForm" class="bg-gray-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-gray-600 shadow transition flex items-center">
+                            <i class="fas fa-times mr-2"></i>{{ t('cancel') }}
+                        </button>
+                        <button @click="saveProduct" class="bg-green-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-green-600 shadow transition flex items-center">
+                            <i class="fas fa-save mr-2"></i>{{ isEditing ? t('update') : t('add') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded shadow overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 border-b">
+                                <th class="p-3">ID</th>
+                                <th class="p-3">{{ t('image') }}</th>
+                                <th class="p-3">{{ t('prodName') }}</th>
+                                <th class="p-3">{{ t('price') }}</th>
+                                <th class="p-3">{{ t('stock') }}</th>
+                                <th class="p-3">{{ t('discount') }}</th>
+                                <th class="p-3">{{ t('actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="p in products" :key="p.id" class="border-b hover:bg-gray-50">
+                                <td class="p-3 text-sm text-gray-500">#{{ p.id }}</td>
+                                <td class="p-3"><img :src="p.image || 'https://placehold.co/50x50'" class="w-10 h-10 object-cover rounded"></td>
+                                <td class="p-3 font-medium">{{ p.name }}</td>
+                                <td class="p-3">RM {{ p.price }}</td>
+                                <td class="p-3">{{ p.stock }}</td>
+                                <td class="p-3">{{ p.discount }}%</td>
+                                <td class="p-3 space-x-2">
+                                    <button @click="editProduct(p)" class="text-blue-500 hover:text-blue-700"><i class="fas fa-edit"></i></button>
+                                    <button @click="deleteProduct(p.id)" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div v-if="activeTab === 'settings'">
+                <div class="bg-white p-6 rounded shadow max-w-xl">
+                    <h3 class="font-bold text-lg mb-4">{{ t('shippingSettings') }}</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">{{ t('standardShippingFee') }} (RM)</label>
+                            <input v-model="settings.shippingFee" type="number" class="w-full border p-2 rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">{{ t('freeShippingThreshold') }} (RM)</label>
+                            <input v-model="settings.freeShippingThreshold" type="number" class="w-full border p-2 rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">{{ t('shopWhatsApp') }}</label>
+                            <input v-model="settings.whatsappNumber" type="text" :placeholder="t('whatsappHint')" class="w-full border p-2 rounded">
+                            <p class="text-xs text-gray-500 mt-1">{{ t('whatsappHint') }}</p>
+                        </div>
+                        <div class="p-4 bg-yellow-50 text-yellow-800 text-sm rounded border border-yellow-200">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            {{ lang === 'zh' ? '設定號碼後，顧客的訂單將直接傳送給您，右下角也會出現聯絡按鈕。' : 'After setting the number, customer orders will be sent directly to you, and a contact button will appear.' }}
+                        </div>
+                        <button @click="saveSettings" class="bg-primary text-white px-4 py-2 rounded hover:bg-orange-600 w-full">{{ t('saveSettings') }}</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-6 mt-8">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p>&copy; 2023 PetFood Mart. All rights reserved.</p>
+            <p class="text-xs text-gray-500 mt-2">{{ t('demoNote') }}</p>
+        </div>
+    </footer>
+
+    <!-- Floating WhatsApp Button -->
+    <div v-if="view !== 'admin-login' && view !== 'admin-dashboard'" class="fixed bottom-6 right-6 z-40">
+        <button @click="openWhatsAppChat" class="bg-green-500 hover:bg-green-600 text-white rounded-full p-4 shadow-lg transition-transform transform hover:scale-110 flex items-center justify-center w-16 h-16">
+            <i class="fab fa-whatsapp text-3xl"></i>
+        </button>
+    </div>
+</div>
+
+<script type="module">
+    // --- FIREBASE CONFIGURATION START ---
+    // 請將您的 Firebase 設定複製貼上到下方 (取代註解部分)
+    // Please paste your Firebase Config below
+    const firebaseConfig = {
+        apiKey: "AIzaSyB8PVi3O0ljW0GrHPKDEMIl6p66xzf1cio",
+        authDomain: "petfoodmart-5b4e7.firebaseapp.com",
+        databaseURL: "https://petfoodmart-5b4e7-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "petfoodmart-5b4e7",
+        storageBucket: "petfoodmart-5b4e7.firebasestorage.app",
+        messagingSenderId: "574097453651",
+        appId: "1:574097453651:web:8cefc51a811a642faa0ca6",
+        measurementId: "G-DQL2GVMJ91"
+    };
+
+    // --- FIREBASE CONFIGURATION END ---
+
+    // Initialize Firebase
+    let db = null;
+    const isFirebaseConfigured = Object.keys(firebaseConfig).length > 0;
+    
+    if (isFirebaseConfigured) {
+        const { initializeApp, getDatabase, ref, set, onValue } = window.firebaseModules;
+        const app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+    }
+
+    const { createApp, ref, computed, reactive, onMounted, watch } = Vue;
+    const { jsPDF } = window.jspdf;
+
+    const app = createApp({
+        setup() {
+            // State
+            const view = ref('home');
+            const lang = ref('zh');
+            const activeTab = ref('products');
+            const searchQuery = ref('');
+            const isLoading = ref(true);
+            const isFirebaseConfigured = ref(Object.keys(firebaseConfig).length > 0);
+            
+            // Initial Mock Data (Fallback)
+            const defaultProducts = [
+                { id: 1, name: 'Royal Canin Puppy', price: 120, stock: 50, discount: 0, image: 'https://placehold.co/400x300?text=Royal+Canin', description: 'Premium dry food for puppies.' },
+                { id: 2, name: 'Whiskas Ocean Fish', price: 45, stock: 100, discount: 10, image: 'https://placehold.co/400x300?text=Whiskas', description: 'Tasty ocean fish flavor for adult cats.' },
+            ];
+
+            // Reactive Data
+            const products = ref([]);
+            const cart = ref([]);
+            const settings = reactive({
+                shippingFee: 15,
+                freeShippingThreshold: 200,
+                whatsappNumber: ''
+            });
+
+            // Order State (Client Side Only)
+            const order = reactive({
+                shippingMethod: 'pickup', // pickup or delivery
+                name: '',
+                phone: '',
+                address: ''
+            });
+
+            // Auth State
+            const loginForm = reactive({ username: '', password: '' });
+            const isAdmin = ref(false);
+
+            // Product Form
+            const productForm = reactive({
+                id: null, name: '', price: 0, stock: 0, discount: 0, image: '', description: ''
+            });
+            const isEditing = ref(false);
+
+            // Firebase Integration
+            onMounted(() => {
+                if (!isFirebaseConfigured.value) {
+                    // Fallback to demo mode if no config
+                    products.value = defaultProducts;
+                    isLoading.value = false;
+                    return;
+                }
+
+                const { ref, onValue } = window.firebaseModules;
+                const dbRef = ref(db, 'shopData');
+                
+                // Realtime Listener
+                onValue(dbRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        products.value = data.products || [];
+                        if (data.settings) {
+                            settings.shippingFee = data.settings.shippingFee;
+                            settings.freeShippingThreshold = data.settings.freeShippingThreshold;
+                            settings.whatsappNumber = data.settings.whatsappNumber || '';
+                        }
+                    } else {
+                        // First time init: save defaults to cloud
+                        products.value = defaultProducts;
+                        saveToCloud();
+                    }
+                    isLoading.value = false;
+                }, (error) => {
+                    console.error("Firebase Error:", error);
+                    alert("Database connection failed. Please check console.");
+                    isLoading.value = false;
+                });
+            });
+
+            // Save to Cloud Function
+            const saveToCloud = () => {
+                if (!db) return;
+                const { ref, set } = window.firebaseModules;
+                set(ref(db, 'shopData'), {
+                    products: products.value,
+                    settings: settings
+                }).catch(err => alert("Save failed: " + err.message));
+            };
+
+            // Replaces old LocalStorage helpers
+            const saveProductsToStorage = () => saveToCloud();
+            const saveSettingsToStorage = () => saveToCloud();
+
+            // Translations
+            const translations = {
+                en: {
+                    products: 'Products',
+                    search: 'Search products...',
+                    add: 'Add to Cart',
+                    stock: 'Stock',
+                    shoppingCart: 'Shopping Cart',
+                    emptyCart: 'Your cart is empty',
+                    backToShop: 'Back to Shop',
+                    orderSummary: 'Order Summary',
+                    shippingMethod: 'Shipping Method',
+                    selfPickup: 'Self Pickup',
+                    delivery: 'Delivery (Standard)',
+                    customDelivery: 'Custom Delivery',
+                    selfPay: 'Fee Apply',
+                    deliveryDetails: 'Delivery Details',
+                    name: 'Full Name',
+                    phone: 'Phone Number',
+                    address: 'Delivery Address',
+                    subtotal: 'Subtotal',
+                    discountPickup: 'Pickup Discount',
+                    shippingFee: 'Shipping Fee',
+                    free: 'Free',
+                    total: 'Total',
+                    freeShippingOver: 'Free shipping for orders over',
+                    sendWhatsApp: 'Order via WhatsApp',
+                    downloadPDF: 'Download Receipt',
+                    manageProducts: 'Manage Products',
+                    settings: 'Settings',
+                    logout: 'Logout',
+                    prodName: 'Product Name',
+                    prodPrice: 'Price',
+                    prodStock: 'Stock',
+                    prodDiscount: 'Discount',
+                    prodImage: 'Product Image',
+                    prodImageURL: 'Image URL (Optional)',
+                    imageNote: 'Note: Uploading large images may affect browser storage.',
+                    prodDesc: 'Description',
+                    image: 'Image',
+                    price: 'Price',
+                    discount: 'Discount',
+                    actions: 'Actions',
+                    update: 'Update',
+                    cancel: 'Cancel',
+                    shippingSettings: 'Shipping Settings',
+                    standardShippingFee: 'Standard Shipping Fee',
+                    freeShippingThreshold: 'Free Shipping Threshold',
+                    shopWhatsApp: 'Store WhatsApp Number',
+                    whatsappHint: 'Format: 60123456789 (Country code, no +)',
+                    saveSettings: 'Save Settings',
+                    demoNote: 'Demo Mode: Admin data is saved to LocalStorage. Customer data resets on refresh.',
+                },
+                zh: {
+                    products: '商品列表',
+                    search: '搜尋商品...',
+                    add: '加入購物車',
+                    stock: '庫存',
+                    shoppingCart: '購物車',
+                    emptyCart: '購物車是空的',
+                    backToShop: '返回購物',
+                    orderSummary: '訂單摘要',
+                    shippingMethod: '物流方式',
+                    selfPickup: '到店自取',
+                    delivery: '物流配送 (標準)',
+                    customDelivery: '自訂物流配送',
+                    selfPay: '自付運費',
+                    deliveryDetails: '收件人資訊',
+                    name: '姓名',
+                    phone: '電話號碼',
+                    address: '配送地址',
+                    subtotal: '小計',
+                    discountPickup: '自取優惠',
+                    shippingFee: '運費',
+                    free: '免運',
+                    total: '總計',
+                    freeShippingOver: '滿額免運：',
+                    sendWhatsApp: 'WhatsApp 下單',
+                    downloadPDF: '下載訂單 PDF',
+                    manageProducts: '商品管理',
+                    settings: '設定',
+                    logout: '登出',
+                    prodName: '商品名稱',
+                    prodPrice: '價格',
+                    prodStock: '庫存',
+                    prodDiscount: '折扣',
+                    prodImage: '商品圖片',
+                    prodImageURL: '圖片連結 (選填)',
+                    imageNote: '注意：上傳過大的圖片可能會佔用瀏覽器儲存空間。',
+                    prodDesc: '描述',
+                    image: '圖片',
+                    price: '價格',
+                    discount: '折扣',
+                    actions: '操作',
+                    update: '更新',
+                    cancel: '取消',
+                    shippingSettings: '物流設定',
+                    standardShippingFee: '標準運費',
+                    freeShippingThreshold: '免運門檻',
+                    shopWhatsApp: '店家 WhatsApp 號碼',
+                    whatsappHint: '例如：60123456789 (需包含國碼，無+號)',
+                    saveSettings: '儲存設定',
+                    demoNote: '演示模式：管理員數據儲存於 LocalStorage，顧客數據刷新後重置。',
+                }
+            };
+
+            const t = (key) => translations[lang.value][key] || key;
+            const toggleLang = () => lang.value = lang.value === 'zh' ? 'en' : 'zh';
+
+            // Computeds
+            const filteredProducts = computed(() => {
+                if (!searchQuery.value) return products.value;
+                const lower = searchQuery.value.toLowerCase();
+                return products.value.filter(p => p.name.toLowerCase().includes(lower));
+            });
+
+            const cartCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0));
+
+            const calculatePrice = (p) => {
+                return (p.price * (1 - p.discount / 100)).toFixed(2);
+            };
+
+            const cartSubtotal = computed(() => {
+                return cart.value.reduce((sum, item) => sum + (item.finalPrice * item.quantity), 0);
+            });
+
+            const pickupDiscount = computed(() => {
+                if (order.shippingMethod === 'pickup') {
+                    return cartSubtotal.value * 0.03;
+                }
+                return 0;
+            });
+
+            const isFreeShipping = computed(() => {
+                return cartSubtotal.value >= settings.freeShippingThreshold;
+            });
+
+            const currentShippingFee = computed(() => {
+                if (order.shippingMethod === 'pickup') return 0;
+                if (order.shippingMethod === 'custom') return settings.shippingFee;
+                return isFreeShipping.value ? 0 : settings.shippingFee;
+            });
+
+            const cartTotal = computed(() => {
+                return cartSubtotal.value - pickupDiscount.value + currentShippingFee.value;
+            });
+
+            // Methods
+            const addToCart = (product) => {
+                if (product.stock <= 0) return;
+                const existing = cart.value.find(c => c.id === product.id);
+                if (existing) {
+                    existing.quantity++;
+                } else {
+                    cart.value.push({
+                        ...product,
+                        finalPrice: calculatePrice(product),
+                        quantity: 1
+                    });
+                }
+                // Optionally decrease stock locally for demo feel
+                // product.stock--;
+            };
+
+            const updateQuantity = (index, change) => {
+                const item = cart.value[index];
+                item.quantity += change;
+                if (item.quantity <= 0) {
+                    cart.value.splice(index, 1);
+                }
+            };
+
+            const removeFromCart = (index) => {
+                cart.value.splice(index, 1);
+            };
+
+            const handleLogin = () => {
+                if (loginForm.username === 'admin' && loginForm.password === 'admin') {
+                    isAdmin.value = true;
+                    view.value = 'admin-dashboard';
+                } else {
+                    alert('Invalid credentials');
+                }
+            };
+
+            const logout = () => {
+                isAdmin.value = false;
+                view.value = 'home';
+                loginForm.username = '';
+                loginForm.password = '';
+            };
+
+            // CRUD Methods
+            const handleImageUpload = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    if (file.size > 500000) {
+                         // warning but proceed
+                        alert(lang.value === 'zh' ? '圖片較大，可能會佔用瀏覽器儲存空間。' : 'Image is large. It might fill up browser storage quickly.');
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        productForm.image = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const saveProduct = () => {
+                if (isEditing.value) {
+                    const idx = products.value.findIndex(p => p.id === productForm.id);
+                    if (idx !== -1) {
+                        products.value[idx] = { ...productForm };
+                    }
+                } else {
+                    const newId = products.value.length ? Math.max(...products.value.map(p => p.id)) + 1 : 1;
+                    products.value.push({ ...productForm, id: newId });
+                }
+                saveProductsToStorage();
+                resetForm();
+            };
+
+            const editProduct = (p) => {
+                Object.assign(productForm, p);
+                isEditing.value = true;
+            };
+
+            const deleteProduct = (id) => {
+                if(confirm('Are you sure?')) {
+                    products.value = products.value.filter(p => p.id !== id);
+                    saveProductsToStorage();
+                }
+            };
+
+            const resetForm = () => {
+                Object.assign(productForm, { id: null, name: '', price: 0, stock: 0, discount: 0, image: '', description: '' });
+                isEditing.value = false;
+            };
+
+            const saveSettings = () => {
+                saveSettingsToStorage();
+                alert('Settings saved!');
+            };
+
+            // Order Logic
+            const generateOrderText = () => {
+                let text = `*New Order - PetFood Mart*\n\n`;
+                text += `*Items:*\n`;
+                cart.value.forEach(item => {
+                    text += `- ${item.name} x${item.quantity} (RM ${item.finalPrice})\n`;
+                });
+                text += `\n*Subtotal:* RM ${cartSubtotal.value.toFixed(2)}`;
+                
+                if (order.shippingMethod === 'pickup') {
+                    text += `\n*Method:* Self Pickup (-3%)`;
+                    text += `\n*Discount:* -RM ${pickupDiscount.value.toFixed(2)}`;
+                } else {
+                    const label = order.shippingMethod === 'custom' ? 'Custom Delivery' : 'Delivery';
+                    text += `\n*Method:* ${label}`;
+                    text += `\n*Shipping:* RM ${currentShippingFee.value.toFixed(2)}`;
+                    text += `\n*Details:* \nName: ${order.name}\nPhone: ${order.phone}\nAddr: ${order.address}`;
+                }
+                
+                text += `\n\n*TOTAL: RM ${cartTotal.value.toFixed(2)}*`;
+                return text;
+            };
+
+            const cleanPhoneNumber = (num) => {
+                return num ? num.replace(/\D/g, '') : '';
+            };
+
+            const sendToWhatsApp = () => {
+                if (['delivery', 'custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
+                    alert('Please fill in delivery details.');
+                    return;
+                }
+                const text = encodeURIComponent(generateOrderText());
+                // Use configured number or fallback to selection
+                const number = cleanPhoneNumber(settings.whatsappNumber);
+                const url = number 
+                    ? `https://wa.me/${number}?text=${text}` 
+                    : `https://wa.me/?text=${text}`;
+                window.open(url, '_blank');
+            };
+
+            const openWhatsAppChat = () => {
+                const number = cleanPhoneNumber(settings.whatsappNumber);
+                const greeting = lang.value === 'zh' ? '你好，我想詢問商品資訊...' : 'Hi, I would like to ask about your products...';
+                const text = encodeURIComponent(greeting);
+                const url = number ? `https://wa.me/${number}?text=${text}` : `https://wa.me/?text=${text}`;
+                window.open(url, '_blank');
+            };
+
+            const generatePDF = () => {
+                if (['delivery', 'custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
+                    alert('Please fill in delivery details.');
+                    return;
+                }
+
+                const doc = new jsPDF();
+                
+                // Header
+                doc.setFontSize(20);
+                doc.setTextColor(249, 115, 22); // Orange
+                doc.text("PetFood Mart", 14, 20);
+                
+                doc.setFontSize(12);
+                doc.setTextColor(0, 0, 0);
+                doc.text("Order Receipt", 14, 30);
+                doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 36);
+
+                // Customer Info
+                if (['delivery', 'custom'].includes(order.shippingMethod)) {
+                    doc.text("Customer Details:", 14, 45);
+                    doc.setFontSize(10);
+                    doc.text(`Name: ${order.name}`, 14, 50);
+                    doc.text(`Phone: ${order.phone}`, 14, 55);
+                    doc.text(`Address: ${order.address}`, 14, 60);
+                } else {
+                    doc.text("Method: Self Pickup", 14, 45);
+                }
+
+                // Table
+                const tableBody = cart.value.map(item => [
+                    item.name,
+                    item.quantity.toString(),
+                    `RM ${item.finalPrice}`,
+                    `RM ${(item.finalPrice * item.quantity).toFixed(2)}`
+                ]);
+
+                doc.autoTable({
+                    startY: ['delivery', 'custom'].includes(order.shippingMethod) ? 70 : 55,
+                    head: [['Item', 'Qty', 'Price', 'Total']],
+                    body: tableBody,
+                    theme: 'striped',
+                    headStyles: { fillColor: [249, 115, 22] }
+                });
+
+                // Totals
+                let finalY = doc.lastAutoTable.finalY + 10;
+                doc.text(`Subtotal: RM ${cartSubtotal.value.toFixed(2)}`, 140, finalY);
+                finalY += 6;
+                
+                if (order.shippingMethod === 'pickup') {
+                    doc.text(`Discount (3%): -RM ${pickupDiscount.value.toFixed(2)}`, 140, finalY);
+                    finalY += 6;
+                } else {
+                    doc.text(`Shipping: RM ${currentShippingFee.value.toFixed(2)}`, 140, finalY);
+                    finalY += 6;
+                }
+                
+                doc.setFontSize(14);
+                doc.setFont("helvetica", "bold");
+                doc.text(`Total: RM ${cartTotal.value.toFixed(2)}`, 140, finalY + 4);
+
+                doc.save("order-receipt.pdf");
+            };
+
+            return {
+                view, lang, t, toggleLang,
+                products, filteredProducts, searchQuery,
+                cart, cartCount, addToCart, removeFromCart, updateQuantity,
+                calculatePrice, cartSubtotal, pickupDiscount, currentShippingFee, cartTotal, isFreeShipping,
+                order,
+                settings,
+                loginForm, isAdmin, handleLogin, logout,
+                activeTab, productForm, isEditing, saveProduct, editProduct, deleteProduct, resetForm, saveSettings, handleImageUpload,
+                sendToWhatsApp, generatePDF, openWhatsAppChat,
+                isFirebaseConfigured, isLoading
+            };
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
