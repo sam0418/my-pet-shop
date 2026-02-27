@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PetFood Mart | 寵物食品專賣</title>
+    <title>PetFood Mart | 宠物食品专卖</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -37,6 +37,17 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .toast-enter { animation: slideIn 0.3s ease; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -52,15 +63,15 @@
                     <span class="font-bold text-xl tracking-tight">PetFood Mart</span>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <button @click="toggleLang" class="text-gray-600 hover:text-primary px-3 py-1 rounded border border-gray-300 text-sm">
+                    <button @click="toggleLang" class="text-gray-600 hover:text-primary px-3 py-1 rounded border border-gray-300 text-sm font-medium transition">
                         {{ lang === 'zh' ? 'EN' : '中文' }}
                     </button>
-                    <button @click="view = 'admin-login'" class="text-gray-600 hover:text-primary">
-                        <i class="fas fa-user-cog"></i>
+                    <button @click="view = 'admin-login'" class="text-gray-600 hover:text-primary transition">
+                        <i class="fas fa-user-cog text-xl"></i>
                     </button>
                     <div class="relative cursor-pointer" @click="view = 'cart'">
-                        <i class="fas fa-shopping-cart text-gray-600 hover:text-primary text-xl"></i>
-                        <span v-if="cartCount > 0" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        <i class="fas fa-shopping-cart text-gray-600 hover:text-primary text-xl transition"></i>
+                        <span v-if="cartCount > 0" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
                             {{ cartCount }}
                         </span>
                     </div>
@@ -72,332 +83,497 @@
     <!-- Main Content -->
     <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
 
-        <div v-if="!supabaseConfigured" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-            <p class="font-bold">尚未設定 Supabase</p>
-            <p>請在程式碼最下方填入你的 Supabase Project URL 和 anon key</p>
+        <div v-if="!supabaseConfigured" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
+            <p class="font-bold">⚠ 尚未配置 Supabase</p>
+            <p class="text-sm mt-1">请在代码中填入你的 Supabase Project URL 和 anon key</p>
         </div>
 
-        <!-- Home -->
+        <!-- ===== HOME ===== -->
         <div v-if="view === 'home'">
-            <div v-if="isLoading" class="text-center py-12">
-                <i class="fas fa-spinner fa-spin text-4xl text-primary"></i>
-                <p class="mt-3">載入商品中...</p>
+            <div v-if="isLoading" class="text-center py-20">
+                <i class="fas fa-spinner fa-spin text-5xl text-primary"></i>
+                <p class="mt-4 text-gray-500">{{ t('loading') }}</p>
             </div>
 
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold">{{ t('products') }}</h2>
-                <input v-model="searchQuery" type="text" :placeholder="t('search')" 
-                       class="w-64 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div v-for="product in filteredProducts" :key="product.id" 
-                     class="bg-white rounded-xl shadow hover:shadow-xl transition-all overflow-hidden">
-                    <div class="h-48 bg-gray-100 relative">
-                        <img :src="product.image || 'https://placehold.co/400x300?text=PetFood'" 
-                             class="w-full h-full object-cover">
-                        <span v-if="product.discount > 0" class="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                            -{{ product.discount }}%
-                        </span>
+            <div v-if="!isLoading">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+                    <h2 class="text-2xl font-bold">{{ t('products') }}</h2>
+                    <div class="relative w-full sm:w-72">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        <input v-model="searchQuery" type="text" :placeholder="t('search')" 
+                               class="w-full pl-9 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
                     </div>
-                    <div class="p-4">
-                        <h3 class="font-semibold text-lg mb-1">{{ product.name }}</h3>
-                        <p class="text-gray-500 text-sm line-clamp-2 mb-3">{{ product.description }}</p>
-                        <div class="flex justify-between items-end">
-                            <div>
-                                <span class="text-2xl font-bold text-primary">RM {{ calculatePrice(product) }}</span>
-                                <span v-if="product.discount > 0" class="text-sm text-gray-400 line-through ml-2">
-                                    RM {{ product.price }}
-                                </span>
-                            </div>
-                            <button @click="addToCart(product)" 
-                                    :disabled="product.stock <= 0"
-                                    class="bg-primary hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-                                {{ t('add') }}
-                            </button>
+                </div>
+
+                <div v-if="filteredProducts.length === 0" class="text-center py-16 text-gray-400">
+                    <i class="fas fa-box-open text-6xl mb-4"></i>
+                    <p class="text-lg">{{ t('noProducts') }}</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div v-for="product in filteredProducts" :key="product.id" 
+                         class="bg-white rounded-xl shadow hover:shadow-xl transition-all overflow-hidden group">
+                        <div class="h-48 bg-gray-100 relative overflow-hidden">
+                            <img :src="product.image || 'https://placehold.co/400x300?text=PetFood'" 
+                                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                            <span v-if="product.discount > 0" class="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                                -{{ product.discount }}%
+                            </span>
+                            <span v-if="product.stock <= 0" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                                <span class="text-white font-bold text-lg">{{ t('outOfStock') }}</span>
+                            </span>
                         </div>
-                        <p class="text-xs text-gray-400 mt-2">庫存: {{ product.stock }}</p>
+                        <div class="p-4">
+                            <h3 class="font-semibold text-lg mb-1 truncate">{{ product.name }}</h3>
+                            <p class="text-gray-500 text-sm line-clamp-2 mb-3 h-10">{{ product.description }}</p>
+                            <div class="flex justify-between items-end">
+                                <div>
+                                    <span class="text-2xl font-bold text-primary">RM {{ calculatePrice(product) }}</span>
+                                    <span v-if="product.discount > 0" class="text-sm text-gray-400 line-through ml-2">
+                                        RM {{ Number(product.price).toFixed(2) }}
+                                    </span>
+                                </div>
+                                <button @click="addToCart(product)" 
+                                        :disabled="product.stock <= 0"
+                                        :class="product.stock <= 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-primary hover:bg-orange-600 cursor-pointer'"
+                                        class="text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                                    <i class="fas fa-cart-plus mr-1"></i>{{ product.stock <= 0 ? t('outOfStock') : t('add') }}
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">
+                                <i class="fas fa-box mr-1"></i>{{ t('stock') }}: {{ product.stock }}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Cart -->
+        <!-- ===== CART ===== -->
         <div v-if="view === 'cart'" class="max-w-4xl mx-auto">
-            <h2 class="text-2xl font-bold mb-6">{{ t('shoppingCart') }}</h2>
+            <div class="flex items-center mb-6">
+                <button @click="view = 'home'" class="text-gray-500 hover:text-primary mr-3 transition">
+                    <i class="fas fa-arrow-left text-lg"></i>
+                </button>
+                <h2 class="text-2xl font-bold">{{ t('shoppingCart') }}</h2>
+                <span v-if="cartCount > 0" class="ml-2 bg-primary text-white text-sm px-2 py-0.5 rounded-full">{{ cartCount }}</span>
+            </div>
             
-            <div v-if="cart.length === 0" class="text-center py-12 bg-white rounded-lg shadow">
-                <i class="fas fa-shopping-basket text-6xl text-gray-300 mb-4"></i>
-                <p class="text-gray-500">{{ t('emptyCart') }}</p>
-                <button @click="view = 'home'" class="mt-4 text-primary font-semibold hover:underline">{{ t('backToShop') }}</button>
+            <div v-if="cart.length === 0" class="text-center py-16 bg-white rounded-xl shadow">
+                <i class="fas fa-shopping-basket text-7xl text-gray-200 mb-5"></i>
+                <p class="text-gray-500 text-lg mb-4">{{ t('emptyCart') }}</p>
+                <button @click="view = 'home'" class="bg-primary text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-orange-600 transition">
+                    <i class="fas fa-store mr-2"></i>{{ t('backToShop') }}
+                </button>
             </div>
 
             <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <!-- Cart Items -->
-                <div class="lg:col-span-2 space-y-4">
-                    <div v-for="(item, index) in cart" :key="index" class="bg-white p-4 rounded-lg shadow flex items-center">
-                        <img :src="item.image || 'https://placehold.co/100x100'" class="w-20 h-20 object-cover rounded mr-4">
-                        <div class="flex-grow">
-                            <h3 class="font-semibold">{{ item.name }}</h3>
-                            <p class="text-sm text-gray-500">RM {{ item.finalPrice }}</p>
+                <div class="lg:col-span-2 space-y-3">
+                    <div v-for="(item, index) in cart" :key="index" 
+                         class="bg-white p-4 rounded-xl shadow flex items-center gap-4">
+                        <img :src="item.image || 'https://placehold.co/100x100?text=Pet'" 
+                             class="w-20 h-20 object-cover rounded-lg flex-shrink-0">
+                        <div class="flex-grow min-w-0">
+                            <h3 class="font-semibold truncate">{{ item.name }}</h3>
+                            <p class="text-primary font-bold">RM {{ item.finalPrice }}</p>
+                            <p class="text-xs text-gray-400">{{ t('subtotal') }}: RM {{ (parseFloat(item.finalPrice) * item.quantity).toFixed(2) }}</p>
                         </div>
-                        <div class="flex items-center space-x-3">
-                            <button @click="updateQuantity(index, -1)" class="text-gray-500 hover:text-primary"><i class="fas fa-minus-circle"></i></button>
-                            <span class="font-bold w-6 text-center">{{ item.quantity }}</span>
-                            <button @click="updateQuantity(index, 1)" class="text-gray-500 hover:text-primary"><i class="fas fa-plus-circle"></i></button>
-                            <button @click="removeFromCart(index)" class="text-red-500 hover:text-red-700 ml-4"><i class="fas fa-trash"></i></button>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button @click="updateQuantity(index, -1)" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-primary hover:text-white flex items-center justify-center transition">
+                                <i class="fas fa-minus text-xs"></i>
+                            </button>
+                            <span class="font-bold w-7 text-center text-lg">{{ item.quantity }}</span>
+                            <button @click="updateQuantity(index, 1)" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-primary hover:text-white flex items-center justify-center transition">
+                                <i class="fas fa-plus text-xs"></i>
+                            </button>
+                            <button @click="removeFromCart(index)" class="w-8 h-8 rounded-full bg-red-50 hover:bg-red-500 hover:text-white text-red-400 flex items-center justify-center transition ml-1">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Checkout Summary -->
-                <div class="bg-white p-6 rounded-lg shadow h-fit">
-                    <h3 class="font-bold text-lg mb-4 border-b pb-2">{{ t('orderSummary') }}</h3>
+                <!-- Order Summary -->
+                <div class="bg-white p-6 rounded-xl shadow h-fit sticky top-20">
+                    <h3 class="font-bold text-lg mb-5 border-b pb-3">{{ t('orderSummary') }}</h3>
                     
                     <!-- Shipping Method -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('shippingMethod') }}</label>
-                        <select v-model="order.shippingMethod" class="w-full border rounded p-2 text-sm">
-                            <option value="pickup">{{ t('selfPickup') }} (-3%)</option>
-                            <option value="delivery">{{ t('delivery') }}</option>
-                            <option value="custom">{{ t('customDelivery') }} ({{ t('selfPay') }})</option>
+                    <div class="mb-5">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">{{ t('shippingMethod') }}</label>
+                        <select v-model="order.shippingMethod" class="w-full border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-gray-50">
+                            <option value="pickup">🏪 {{ t('selfPickup') }} (-3%)</option>
+                            <option value="delivery">🚚 {{ t('delivery') }}</option>
+                            <option value="custom">📦 {{ t('customDelivery') }} ({{ t('selfPay') }})</option>
                         </select>
                     </div>
 
-                    <!-- Customer Info (For Delivery & Custom) -->
-                    <div v-if="['delivery', 'custom'].includes(order.shippingMethod)" class="space-y-3 mb-4 text-sm bg-gray-50 p-3 rounded border border-gray-200">
-                        <h4 class="font-bold text-gray-700 text-xs uppercase tracking-wide mb-2">{{ t('deliveryDetails') }}</h4>
+                    <!-- Delivery Info -->
+                    <div v-if="['delivery', 'custom'].includes(order.shippingMethod)" class="space-y-3 mb-5 bg-orange-50 p-4 rounded-lg border border-orange-200">
+                        <h4 class="font-bold text-gray-700 text-xs uppercase tracking-wide text-primary">{{ t('deliveryDetails') }}</h4>
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">{{ t('name') }} <span class="text-red-500">*</span></label>
-                            <input v-model="order.name" type="text" :placeholder="t('name')" class="w-full border p-2 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('name') }} <span class="text-red-500">*</span></label>
+                            <input v-model="order.name" type="text" :placeholder="t('name')" 
+                                   class="w-full border p-2 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">{{ t('phone') }} <span class="text-red-500">*</span></label>
-                            <input v-model="order.phone" type="text" :placeholder="t('phone')" class="w-full border p-2 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('phone') }} <span class="text-red-500">*</span></label>
+                            <input v-model="order.phone" type="tel" :placeholder="t('phone')" 
+                                   class="w-full border p-2 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">{{ t('address') }} <span class="text-red-500">*</span></label>
-                            <textarea v-model="order.address" :placeholder="t('address')" class="w-full border p-2 rounded focus:ring-1 focus:ring-primary focus:border-primary" rows="2"></textarea>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('address') }} <span class="text-red-500">*</span></label>
+                            <textarea v-model="order.address" :placeholder="t('address')" 
+                                      class="w-full border p-2 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none resize-none" rows="2"></textarea>
                         </div>
                     </div>
 
                     <!-- Price Breakdown -->
-                    <div class="space-y-2 text-sm mb-6">
-                        <div class="flex justify-between">
+                    <div class="space-y-2 text-sm mb-5 bg-gray-50 p-3 rounded-lg">
+                        <div class="flex justify-between text-gray-600">
                             <span>{{ t('subtotal') }}</span>
                             <span>RM {{ cartSubtotal.toFixed(2) }}</span>
                         </div>
                         
-                        <div v-if="order.shippingMethod === 'pickup'" class="flex justify-between text-green-600">
+                        <div v-if="order.shippingMethod === 'pickup'" class="flex justify-between text-green-600 font-medium">
                             <span>{{ t('discountPickup') }} (3%)</span>
                             <span>- RM {{ pickupDiscount.toFixed(2) }}</span>
                         </div>
                         
-                        <div v-if="order.shippingMethod === 'delivery'" class="flex justify-between">
+                        <div v-if="order.shippingMethod === 'delivery'" class="flex justify-between text-gray-600">
                             <span>{{ t('shippingFee') }}</span>
-                            <span v-if="isFreeShipping" class="text-green-600">{{ t('free') }}</span>
-                            <span v-else>RM {{ settings.shippingFee }}</span>
+                            <span v-if="isFreeShipping" class="text-green-600 font-medium">{{ t('free') }} 🎉</span>
+                            <span v-else>RM {{ Number(settings.shippingFee).toFixed(2) }}</span>
                         </div>
-                        <div v-if="order.shippingMethod === 'custom'" class="flex justify-between">
+                        <div v-if="order.shippingMethod === 'custom'" class="flex justify-between text-gray-600">
                             <span>{{ t('shippingFee') }}</span>
-                            <span>RM {{ settings.shippingFee }}</span>
+                            <span>RM {{ Number(settings.shippingFee).toFixed(2) }}</span>
                         </div>
 
-                        <div class="flex justify-between font-bold text-lg pt-2 border-t">
+                        <div class="flex justify-between font-bold text-base pt-2 border-t border-gray-200">
                             <span>{{ t('total') }}</span>
-                            <span>RM {{ cartTotal.toFixed(2) }}</span>
-                        </div>
-                        <div v-if="order.shippingMethod === 'delivery' && !isFreeShipping" class="text-xs text-gray-500 mt-1">
-                            {{ t('freeShippingOver') }} RM {{ settings.freeShippingThreshold }}
+                            <span class="text-primary text-lg">RM {{ cartTotal.toFixed(2) }}</span>
                         </div>
                     </div>
 
-                    <!-- Actions -->
-                    <div class="space-y-3">
-                        <button @click="sendToWhatsApp" class="w-full bg-green-500 text-white py-2 rounded font-bold hover:bg-green-600 transition flex items-center justify-center">
-                            <i class="fab fa-whatsapp mr-2"></i> {{ t('sendWhatsApp') }}
+                    <div v-if="order.shippingMethod === 'delivery' && !isFreeShipping" class="text-xs text-gray-400 mb-4 text-center bg-yellow-50 py-2 px-3 rounded-lg border border-yellow-200">
+                        <i class="fas fa-truck mr-1 text-yellow-500"></i>{{ t('freeShippingOver') }} RM {{ settings.freeShippingThreshold }}
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="space-y-2.5">
+                        <button @click="sendToWhatsApp" class="w-full bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 transition flex items-center justify-center gap-2 shadow-md">
+                            <i class="fab fa-whatsapp text-xl"></i> {{ t('sendWhatsApp') }}
                         </button>
-                        <button @click="generatePDF" class="w-full bg-gray-800 text-white py-2 rounded font-bold hover:bg-gray-900 transition flex items-center justify-center">
-                            <i class="fas fa-file-pdf mr-2"></i> {{ t('downloadPDF') }}
+                        <button @click="generatePDF" class="w-full bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-900 transition flex items-center justify-center gap-2 shadow-md">
+                            <i class="fas fa-file-pdf"></i> {{ t('downloadPDF') }}
+                        </button>
+                        <button @click="view = 'home'" class="w-full border-2 border-gray-200 text-gray-600 py-2.5 rounded-xl font-medium hover:border-primary hover:text-primary transition text-sm">
+                            <i class="fas fa-arrow-left mr-1"></i>{{ t('backToShop') }}
                         </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        </div>
-        <!-- admin -->
+        <!-- ===== ADMIN LOGIN ===== -->
         <div v-if="view === 'admin-login'" class="max-w-md mx-auto mt-10">
-            <div class="bg-white p-8 rounded-lg shadow-md">
-                <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Admin Login</h2>
+            <div class="bg-white p-8 rounded-xl shadow-lg">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-primary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-user-shield text-primary text-2xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800">Admin Login</h2>
+                    <p class="text-gray-500 text-sm mt-1">PetFood Mart 管理后台</p>
+                </div>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Username</label>
-                        <input v-model="loginForm.username" type="text" class="w-full border p-2 rounded mt-1">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Username</label>
+                        <input v-model="loginForm.username" type="text" 
+                               class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" 
+                               placeholder="Enter username"
+                               @keyup.enter="handleLogin">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Password</label>
-                        <input v-model="loginForm.password" type="password" class="w-full border p-2 rounded mt-1">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+                        <input v-model="loginForm.password" type="password" 
+                               class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" 
+                               placeholder="Enter password"
+                               @keyup.enter="handleLogin">
                     </div>
-                    <button @click="handleLogin" class="w-full bg-primary text-white py-2 rounded font-bold hover:bg-orange-600">Login</button>
-                    <p class="text-xs text-gray-500 text-center">Hint: admin / admin</p>
+                    <button @click="handleLogin" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:bg-orange-600 transition shadow-md">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Login
+                    </button>
+                    <button @click="view = 'home'" class="w-full border border-gray-200 text-gray-500 py-2.5 rounded-lg hover:bg-gray-50 transition text-sm">
+                        <i class="fas fa-arrow-left mr-1"></i> Back to Shop
+                    </button>
+                    <p class="text-xs text-gray-400 text-center bg-gray-50 py-2 rounded-lg">
+                        <i class="fas fa-info-circle mr-1"></i>Hint: admin / admin
+                    </p>
                 </div>
             </div>
         </div>
 
-        <!-- View: Admin Dashboard -->
+        <!-- ===== ADMIN DASHBOARD ===== -->
         <div v-if="view === 'admin-dashboard'" class="max-w-6xl mx-auto">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold">Admin Dashboard</h2>
-                <div class="space-x-2">
-                    <button @click="activeTab = 'products'" :class="{'bg-primary text-white': activeTab === 'products', 'bg-white text-gray-700': activeTab !== 'products'}" class="px-4 py-2 rounded shadow">{{ t('manageProducts') }}</button>
-                    <button @click="activeTab = 'settings'" :class="{'bg-primary text-white': activeTab === 'settings', 'bg-white text-gray-700': activeTab !== 'settings'}" class="px-4 py-2 rounded shadow">{{ t('settings') }}</button>
-                    <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded shadow">{{ t('logout') }}</button>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold">Admin Dashboard</h2>
+                    <p class="text-gray-500 text-sm">PetFood Mart 管理后台</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button @click="activeTab = 'products'" 
+                            :class="activeTab === 'products' ? 'bg-primary text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-50'" 
+                            class="px-4 py-2 rounded-lg text-sm font-medium transition border border-gray-200">
+                        <i class="fas fa-box mr-1.5"></i>{{ t('manageProducts') }}
+                    </button>
+                    <button @click="activeTab = 'settings'" 
+                            :class="activeTab === 'settings' ? 'bg-primary text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-50'" 
+                            class="px-4 py-2 rounded-lg text-sm font-medium transition border border-gray-200">
+                        <i class="fas fa-cog mr-1.5"></i>{{ t('settings') }}
+                    </button>
+                    <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition shadow-md">
+                        <i class="fas fa-sign-out-alt mr-1.5"></i>{{ t('logout') }}
+                    </button>
                 </div>
             </div>
 
             <!-- Products Tab -->
             <div v-if="activeTab === 'products'">
-                <div class="mb-4 bg-white p-6 rounded shadow border border-gray-200">
-                    <h3 class="font-bold text-xl mb-4 text-gray-800 border-b pb-2 flex items-center">
-                        <i class="fas fa-box-open mr-2 text-primary"></i>
-                        {{ isEditing ? (lang === 'zh' ? '編輯商品資訊' : 'Edit Product Details') : (lang === 'zh' ? '新增商品' : 'Add New Product') }}
+                <!-- Add / Edit Form -->
+                <div class="mb-6 bg-white p-6 rounded-xl shadow border border-gray-100">
+                    <h3 class="font-bold text-lg mb-5 text-gray-800 border-b pb-3 flex items-center">
+                        <span class="w-8 h-8 bg-primary bg-opacity-10 rounded-lg flex items-center justify-center mr-3">
+                            <i class="fas fa-box-open text-primary text-sm"></i>
+                        </span>
+                        {{ isEditing ? t('editProduct') : t('addProduct') }}
                     </h3>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Product Name -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">
                                 {{ t('prodName') }} <span class="text-red-500">*</span>
                             </label>
-                            <input v-model="productForm.name" type="text" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" :placeholder="t('prodName')">
+                            <input v-model="productForm.name" type="text" 
+                                   class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" 
+                                   :placeholder="t('prodName')">
                         </div>
-
-                        <!-- Price -->
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">
                                 {{ t('prodPrice') }} (RM) <span class="text-red-500">*</span>
                             </label>
-                            <input v-model="productForm.price" type="number" min="0" step="0.01" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="0.00">
+                            <input v-model="productForm.price" type="number" min="0" step="0.01" 
+                                   class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" 
+                                   placeholder="0.00">
                         </div>
-
-                        <!-- Stock -->
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">
-                                {{ t('prodStock') }} ({{ lang === 'zh' ? '數量' : 'Qty' }}) <span class="text-red-500">*</span>
+                                {{ t('prodStock') }} <span class="text-red-500">*</span>
                             </label>
-                            <input v-model="productForm.stock" type="number" min="0" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="0">
+                            <input v-model="productForm.stock" type="number" min="0" 
+                                   class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" 
+                                   placeholder="0">
                         </div>
-
-                        <!-- Discount -->
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">
                                 {{ t('prodDiscount') }} (%)
                             </label>
-                            <input v-model="productForm.discount" type="number" min="0" max="100" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="0">
+                            <input v-model="productForm.discount" type="number" min="0" max="100" 
+                                   class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" 
+                                   placeholder="0">
                         </div>
-
-                        <!-- Image Upload -->
                         <div class="lg:col-span-2">
-                            <label class="block text-sm font-bold text-gray-700 mb-2">
-                                {{ t('prodImage') }} (JPG/PNG)
-                            </label>
-                            <div class="flex items-start space-x-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">{{ t('prodImage') }}</label>
+                            <div class="flex items-start gap-3">
                                 <div class="flex-grow">
-                                    <input type="file" @change="handleImageUpload" accept="image/jpeg, image/png" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-orange-600 mb-2 transition-all cursor-pointer"/>
-                                    <input v-model="productForm.image" type="text" :placeholder="t('prodImageURL')" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-sm text-gray-600">
+                                    <input type="file" @change="handleImageUpload" accept="image/jpeg,image/png,image/webp" 
+                                           class="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-orange-600 mb-2 cursor-pointer"/>
+                                    <input v-model="productForm.image" type="text" :placeholder="t('prodImageURL')" 
+                                           class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-sm">
                                 </div>
-                                <div v-if="productForm.image" class="w-24 h-24 border rounded overflow-hidden bg-gray-100 flex-shrink-0 relative group shadow-sm">
+                                <div v-if="productForm.image" class="w-20 h-20 border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 relative group shadow">
                                     <img :src="productForm.image" class="w-full h-full object-cover">
                                     <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer" @click="productForm.image = ''">
-                                        <i class="fas fa-trash text-white"></i>
+                                        <i class="fas fa-trash text-white text-sm"></i>
                                     </div>
                                 </div>
                             </div>
-                            <p class="text-xs text-gray-500 mt-1">{{ t('imageNote') }}</p>
+                            <p class="text-xs text-gray-400 mt-1"><i class="fas fa-info-circle mr-1"></i>{{ t('imageNote') }}</p>
                         </div>
-
-                        <!-- Description -->
                         <div class="col-span-1 md:col-span-2 lg:col-span-3">
-                            <label class="block text-sm font-bold text-gray-700 mb-2">
-                                {{ t('prodDesc') }}
-                            </label>
-                            <textarea v-model="productForm.description" rows="4" class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all resize-none" :placeholder="t('prodDesc')"></textarea>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">{{ t('prodDesc') }}</label>
+                            <textarea v-model="productForm.description" rows="3" 
+                                      class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all resize-none" 
+                                      :placeholder="t('prodDesc')"></textarea>
                         </div>
                     </div>
 
-                    <div class="mt-6 flex space-x-3 border-t pt-4 justify-end">
-                        <button v-if="isEditing" @click="resetForm" class="bg-gray-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-gray-600 shadow transition flex items-center">
-                            <i class="fas fa-times mr-2"></i>{{ t('cancel') }}
+                    <div class="mt-5 flex gap-3 border-t pt-4 justify-end">
+                        <button v-if="isEditing" @click="resetForm" 
+                                class="bg-gray-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-gray-600 transition flex items-center gap-2">
+                            <i class="fas fa-times"></i>{{ t('cancel') }}
                         </button>
-                        <button @click="saveProduct" class="bg-green-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-green-600 shadow transition flex items-center">
-                            <i class="fas fa-save mr-2"></i>{{ isEditing ? t('update') : t('add') }}
+                        <button @click="saveProduct" 
+                                class="bg-green-500 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-green-600 shadow transition flex items-center gap-2">
+                            <i class="fas fa-save"></i>{{ isEditing ? t('update') : t('add') }}
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded shadow overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100 border-b">
-                                <th class="p-3">ID</th>
-                                <th class="p-3">{{ t('image') }}</th>
-                                <th class="p-3">{{ t('prodName') }}</th>
-                                <th class="p-3">{{ t('price') }}</th>
-                                <th class="p-3">{{ t('stock') }}</th>
-                                <th class="p-3">{{ t('discount') }}</th>
-                                <th class="p-3">{{ t('actions') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="p in products" :key="p.id" class="border-b hover:bg-gray-50">
-                                <td class="p-3 text-sm text-gray-500">#{{ p.id }}</td>
-                                <td class="p-3"><img :src="p.image || 'https://placehold.co/50x50'" class="w-10 h-10 object-cover rounded"></td>
-                                <td class="p-3 font-medium">{{ p.name }}</td>
-                                <td class="p-3">RM {{ p.price }}</td>
-                                <td class="p-3">{{ p.stock }}</td>
-                                <td class="p-3">{{ p.discount }}%</td>
-                                <td class="p-3 space-x-2">
-                                    <button @click="editProduct(p)" class="text-blue-500 hover:text-blue-700"><i class="fas fa-edit"></i></button>
-                                    <button @click="deleteProduct(p.id)" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <!-- Product Table -->
+                <div class="bg-white rounded-xl shadow overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-700">
+                            <i class="fas fa-list mr-2 text-primary"></i>{{ t('manageProducts') }}
+                            <span class="ml-2 bg-primary text-white text-xs px-2 py-0.5 rounded-full">{{ products.length }}</span>
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 border-b">
+                                    <th class="p-3 font-semibold text-gray-600">ID</th>
+                                    <th class="p-3 font-semibold text-gray-600">{{ t('image') }}</th>
+                                    <th class="p-3 font-semibold text-gray-600">{{ t('prodName') }}</th>
+                                    <th class="p-3 font-semibold text-gray-600">{{ t('price') }}</th>
+                                    <th class="p-3 font-semibold text-gray-600">{{ t('stock') }}</th>
+                                    <th class="p-3 font-semibold text-gray-600">{{ t('discount') }}</th>
+                                    <th class="p-3 font-semibold text-gray-600">{{ t('actions') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-if="products.length === 0">
+                                    <td colspan="7" class="p-10 text-center text-gray-400">
+                                        <i class="fas fa-box-open text-4xl mb-3 block"></i>
+                                        {{ t('noProducts') }}
+                                    </td>
+                                </tr>
+                                <tr v-for="p in products" :key="p.id" class="border-b hover:bg-orange-50 transition">
+                                    <td class="p-3 text-gray-400 text-xs">#{{ p.id }}</td>
+                                    <td class="p-3">
+                                        <img :src="p.image || 'https://placehold.co/50x50?text=Pet'" 
+                                             class="w-12 h-12 object-cover rounded-lg border">
+                                    </td>
+                                    <td class="p-3 font-semibold text-gray-800">{{ p.name }}</td>
+                                    <td class="p-3 text-primary font-bold">RM {{ Number(p.price).toFixed(2) }}</td>
+                                    <td class="p-3">
+                                        <span :class="p.stock <= 0 ? 'bg-red-100 text-red-600' : p.stock <= 5 ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'" 
+                                              class="px-2 py-0.5 rounded-full text-xs font-medium">
+                                            {{ p.stock }}
+                                        </span>
+                                    </td>
+                                    <td class="p-3">
+                                        <span v-if="p.discount > 0" class="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs font-medium">-{{ p.discount }}%</span>
+                                        <span v-else class="text-gray-400 text-xs">—</span>
+                                    </td>
+                                    <td class="p-3">
+                                        <div class="flex gap-2">
+                                            <button @click="editProduct(p)" class="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white flex items-center justify-center transition">
+                                                <i class="fas fa-edit text-xs"></i>
+                                            </button>
+                                            <button @click="deleteProduct(p.id)" class="w-8 h-8 rounded-lg bg-red-50 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition">
+                                                <i class="fas fa-trash text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
+            <!-- Settings Tab -->
+            <div v-if="activeTab === 'settings'" class="max-w-lg">
+                <div class="bg-white p-6 rounded-xl shadow">
+                    <h3 class="font-bold text-lg mb-6 border-b pb-3 flex items-center">
+                        <span class="w-8 h-8 bg-primary bg-opacity-10 rounded-lg flex items-center justify-center mr-3">
+                            <i class="fas fa-cog text-primary text-sm"></i>
+                        </span>
+                        {{ t('shippingSettings') }}
+                    </h3>
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-truck mr-1 text-gray-400"></i>{{ t('standardShippingFee') }} (RM)
+                            </label>
+                            <input v-model="settings.shippingFee" type="number" min="0" step="0.5" 
+                                   class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-gift mr-1 text-gray-400"></i>{{ t('freeShippingThreshold') }} (RM)
+                            </label>
+                            <input v-model="settings.freeShippingThreshold" type="number" min="0" step="10" 
+                                   class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fab fa-whatsapp mr-1 text-green-500"></i>{{ t('shopWhatsApp') }}
+                            </label>
+                            <input v-model="settings.whatsappNumber" type="text" placeholder="60123456789" 
+                                   class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-primary outline-none">
+                            <p class="text-xs text-gray-400 mt-1.5">
+                                <i class="fas fa-info-circle mr-1"></i>{{ t('whatsappHint') }}
+                            </p>
+                        </div>
+                        <button @click="saveSettings" 
+                                class="w-full bg-primary text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition flex items-center justify-center gap-2 shadow-md">
+                            <i class="fas fa-save"></i> {{ t('saveSettings') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-6 mt-auto">
+    <footer class="bg-gray-800 text-white py-8 mt-auto">
         <div class="max-w-7xl mx-auto px-4 text-center">
-            <p>&copy; 2026 PetFood Mart. All rights reserved.</p>
+            <div class="flex items-center justify-center mb-3">
+                <i class="fas fa-paw text-primary mr-2 text-xl"></i>
+                <span class="font-bold text-lg">PetFood Mart</span>
+            </div>
+            <p class="text-gray-400 text-sm">专注于为你的爱宠提供最优质的食品</p>
+            <p class="text-gray-500 text-xs mt-2">&copy; 2026 PetFood Mart. All rights reserved.</p>
         </div>
     </footer>
 
-    <!-- Floating WhatsApp -->
-    <div v-if="view !== 'admin-login' && view !== 'admin-dashboard'" class="fixed bottom-6 right-6">
+    <!-- Floating WhatsApp Button -->
+    <div v-if="view !== 'admin-login' && view !== 'admin-dashboard'" class="fixed bottom-6 right-6 z-40">
         <button @click="openWhatsAppChat" 
-                class="bg-green-500 hover:bg-green-600 w-16 h-16 rounded-full flex items-center justify-center text-white shadow-xl text-3xl">
+                title="联系我们"
+                class="bg-green-500 hover:bg-green-600 w-16 h-16 rounded-full flex items-center justify-center text-white shadow-2xl text-3xl transition-all hover:scale-110 active:scale-95">
             <i class="fab fa-whatsapp"></i>
         </button>
     </div>
+
+    <!-- Toast Notification -->
+    <transition name="fade">
+        <div v-if="toast.show" class="fixed top-20 right-4 z-50">
+            <div :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" 
+                 class="text-white px-5 py-3.5 rounded-xl shadow-xl flex items-center gap-3 min-w-56">
+                <div :class="toast.type === 'success' ? 'bg-green-400' : 'bg-red-400'" class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i :class="toast.type === 'success' ? 'fas fa-check' : 'fas fa-exclamation'" class="text-sm"></i>
+                </div>
+                <span class="font-medium">{{ toast.message }}</span>
+            </div>
+        </div>
+    </transition>
 </div>
 
 <script type="module">
-    // ====================== SUPABASE 設定 ======================
+    // ====================== SUPABASE 配置 ======================
     const supabaseUrl = "https://oehiiqwunnfjvqkmxxen.supabase.co";
     const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9laGlpcXd1bm5manZxa214eGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxNDc1MzIsImV4cCI6MjA4NzcyMzUzMn0.JmHZeoGde5bEaSbGvptgKf3gzRDqUKuVgUyLHaN_pow';
-
     const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
     // ===========================================================
 
     const { createApp, ref, computed, reactive, onMounted } = Vue;
     const { jsPDF } = window.jspdf;
 
-    const app = createApp({
+    createApp({
         setup() {
             const view = ref('home');
             const lang = ref('zh');
@@ -408,185 +584,140 @@
 
             const products = ref([]);
             const cart = ref([]);
-            const settings = reactive({
-                shippingFee: 15,
-                freeShippingThreshold: 200,
-                whatsappNumber: ''
-            });
-
-            const order = reactive({
-                shippingMethod: 'pickup',
-                name: '',
-                phone: '',
-                address: ''
-            });
-
+            const settings = reactive({ shippingFee: 15, freeShippingThreshold: 200, whatsappNumber: '' });
+            const order = reactive({ shippingMethod: 'pickup', name: '', phone: '', address: '' });
             const loginForm = reactive({ username: '', password: '' });
             const isAdmin = ref(false);
-
-            const productForm = reactive({
-                id: null, name: '', price: 0, stock: 0, discount: 0, image: '', description: ''
-            });
+            const productForm = reactive({ id: null, name: '', price: 0, stock: 0, discount: 0, image: '', description: '' });
             const isEditing = ref(false);
+            const toast = reactive({ show: false, message: '', type: 'success' });
 
-            // 翻譯
+            // ===== Translations =====
             const translations = {
-                en: { products: 'Products',
-                    search: 'Search products...',
-                    add: 'Add to Cart',
-                    stock: 'Stock',
-                    shoppingCart: 'Shopping Cart',
-                    emptyCart: 'Your cart is empty',
-                    backToShop: 'Back to Shop',
-                    orderSummary: 'Order Summary',
-                    shippingMethod: 'Shipping Method',
-                    selfPickup: 'Self Pickup',
-                    delivery: 'Delivery (Standard)',
-                    customDelivery: 'Custom Delivery',
-                    selfPay: 'Fee Apply',
-                    deliveryDetails: 'Delivery Details',
-                    name: 'Full Name',
-                    phone: 'Phone Number',
-                    address: 'Delivery Address',
-                    subtotal: 'Subtotal',
-                    discountPickup: 'Pickup Discount',
-                    shippingFee: 'Shipping Fee',
-                    free: 'Free',
-                    total: 'Total',
+                en: {
+                    products: 'Products', search: 'Search products...', add: 'Add to Cart',
+                    outOfStock: 'Out of Stock', stock: 'Stock', loading: 'Loading products...',
+                    noProducts: 'No products found',
+                    shoppingCart: 'Shopping Cart', emptyCart: 'Your cart is empty', backToShop: 'Back to Shop',
+                    orderSummary: 'Order Summary', shippingMethod: 'Shipping Method',
+                    selfPickup: 'Self Pickup', delivery: 'Standard Delivery',
+                    customDelivery: 'Custom Delivery', selfPay: 'Fee Apply',
+                    deliveryDetails: 'Delivery Details', name: 'Full Name',
+                    phone: 'Phone Number', address: 'Delivery Address',
+                    subtotal: 'Subtotal', discountPickup: 'Pickup Discount',
+                    shippingFee: 'Shipping Fee', free: 'Free!', total: 'Total',
                     freeShippingOver: 'Free shipping for orders over',
-                    sendWhatsApp: 'Order via WhatsApp',
-                    downloadPDF: 'Download Receipt',
-                    manageProducts: 'Manage Products',
-                    settings: 'Settings',
-                    logout: 'Logout',
-                    prodName: 'Product Name',
-                    prodPrice: 'Price',
-                    prodStock: 'Stock',
-                    prodDiscount: 'Discount',
-                    prodImage: 'Product Image',
-                    prodImageURL: 'Image URL (Optional)',
-                    imageNote: 'Note: Uploading large images may affect browser storage.',
-                    prodDesc: 'Description',
-                    image: 'Image',
-                    price: 'Price',
-                    discount: 'Discount',
-                    actions: 'Actions',
-                    update: 'Update',
-                    cancel: 'Cancel',
-                    shippingSettings: 'Shipping Settings',
-                    standardShippingFee: 'Standard Shipping Fee',
+                    sendWhatsApp: 'Order via WhatsApp', downloadPDF: 'Download Receipt (PDF)',
+                    manageProducts: 'Products', settings: 'Settings', logout: 'Logout',
+                    addProduct: 'Add New Product', editProduct: 'Edit Product Details',
+                    prodName: 'Product Name', prodPrice: 'Price', prodStock: 'Stock Qty',
+                    prodDiscount: 'Discount', prodImage: 'Product Image',
+                    prodImageURL: 'Or paste Image URL here...',
+                    imageNote: 'Large images may affect performance.',
+                    prodDesc: 'Description', image: 'Image', price: 'Price',
+                    discount: 'Discount', actions: 'Actions', update: 'Update', cancel: 'Cancel',
+                    shippingSettings: 'Shipping & Store Settings', standardShippingFee: 'Standard Shipping Fee',
                     freeShippingThreshold: 'Free Shipping Threshold',
                     shopWhatsApp: 'Store WhatsApp Number',
-                    whatsappHint: 'Format: 60123456789 (Country code, no +)',
+                    whatsappHint: 'Format: 60123456789 (country code, no +)',
                     saveSettings: 'Save Settings',
-                    demoNote: 'Demo Mode: Admin data is saved to LocalStorage. Customer data resets on refresh.',},
-                zh: { products: '商品列表',
-                    search: '搜尋商品...',
-                    add: '加入購物車',
-                    stock: '庫存',
-                    shoppingCart: '購物車',
-                    emptyCart: '購物車是空的',
-                    backToShop: '返回購物',
-                    orderSummary: '訂單摘要',
-                    shippingMethod: '物流方式',
-                    selfPickup: '到店自取',
-                    delivery: '物流配送 (標準)',
-                    customDelivery: '自訂物流配送',
-                    selfPay: '自付運費',
-                    deliveryDetails: '收件人資訊',
-                    name: '姓名',
-                    phone: '電話號碼',
-                    address: '配送地址',
-                    subtotal: '小計',
-                    discountPickup: '自取優惠',
-                    shippingFee: '運費',
-                    free: '免運',
-                    total: '總計',
-                    freeShippingOver: '滿額免運：',
-                    sendWhatsApp: 'WhatsApp 下單',
-                    downloadPDF: '下載訂單 PDF',
-                    manageProducts: '商品管理',
-                    settings: '設定',
-                    logout: '登出',
-                    prodName: '商品名稱',
-                    prodPrice: '價格',
-                    prodStock: '庫存',
-                    prodDiscount: '折扣',
-                    prodImage: '商品圖片',
-                    prodImageURL: '圖片連結 (選填)',
-                    imageNote: '注意：上傳過大的圖片可能會佔用瀏覽器儲存空間。',
-                    prodDesc: '描述',
-                    image: '圖片',
-                    price: '價格',
-                    discount: '折扣',
-                    actions: '操作',
-                    update: '更新',
-                    cancel: '取消',
-                    shippingSettings: '物流設定',
-                    standardShippingFee: '標準運費',
-                    freeShippingThreshold: '免運門檻',
-                    shopWhatsApp: '店家 WhatsApp 號碼',
-                    whatsappHint: '例如：60123456789 (需包含國碼，無+號)',
-                    saveSettings: '儲存設定',
-                    demoNote: '演示模式：管理員數據儲存於 LocalStorage，顧客數據刷新後重置。', }
+                    saved: 'Settings saved!', addedToCart: 'Added to cart!',
+                    confirmDelete: 'Are you sure to delete this product?',
+                    fillDelivery: 'Please fill in all delivery details.',
+                    loginError: 'Incorrect username or password.',
+                    productSaved: 'Product added!', productUpdated: 'Product updated!',
+                    productDeleted: 'Product deleted!', fillRequired: 'Please fill in name and price.',
+                },
+                zh: {
+                    products: '商品列表', search: '搜索商品...', add: '加入购物车',
+                    outOfStock: '已售罄', stock: '库存', loading: '正在加载商品...',
+                    noProducts: '没有找到商品',
+                    shoppingCart: '购物车', emptyCart: '购物车为空', backToShop: '继续购物',
+                    orderSummary: '订单摘要', shippingMethod: '配送方式',
+                    selfPickup: '到店自取', delivery: '物流配送（标准）',
+                    customDelivery: '自定义物流配送', selfPay: '自付运费',
+                    deliveryDetails: '收件人信息', name: '姓名',
+                    phone: '手机号码', address: '收货地址',
+                    subtotal: '小计', discountPickup: '自取优惠',
+                    shippingFee: '运费', free: '免运费！', total: '合计',
+                    freeShippingOver: '满额免运：',
+                    sendWhatsApp: 'WhatsApp 下单', downloadPDF: '下载订单 PDF',
+                    manageProducts: '商品管理', settings: '设置', logout: '退出登录',
+                    addProduct: '新增商品', editProduct: '编辑商品信息',
+                    prodName: '商品名称', prodPrice: '价格', prodStock: '库存数量',
+                    prodDiscount: '折扣', prodImage: '商品图片',
+                    prodImageURL: '或粘贴图片链接...',
+                    imageNote: '注意：上传大图可能影响性能。',
+                    prodDesc: '商品描述', image: '图片', price: '价格',
+                    discount: '折扣', actions: '操作', update: '更新', cancel: '取消',
+                    shippingSettings: '物流与店铺设置', standardShippingFee: '标准运费',
+                    freeShippingThreshold: '免运门槛',
+                    shopWhatsApp: '店家 WhatsApp 号码',
+                    whatsappHint: '例如：60123456789（含国家代码，无 + 号）',
+                    saveSettings: '保存设置',
+                    saved: '设置已保存！', addedToCart: '已加入购物车！',
+                    confirmDelete: '确定要删除该商品吗？',
+                    fillDelivery: '请填写所有收件人信息。',
+                    loginError: '账号或密码错误。',
+                    productSaved: '商品已添加！', productUpdated: '商品已更新！',
+                    productDeleted: '商品已删除！', fillRequired: '请填写商品名称和价格。',
+                }
             };
 
             const t = (key) => translations[lang.value]?.[key] || key;
             const toggleLang = () => lang.value = lang.value === 'zh' ? 'en' : 'zh';
 
-            // 載入資料
+            // ===== Toast =====
+            const showToast = (message, type = 'success') => {
+                toast.show = true; toast.message = message; toast.type = type;
+                setTimeout(() => { toast.show = false; }, 3000);
+            };
+
+            // ===== Load Data =====
             const loadData = async () => {
                 isLoading.value = true;
-
                 const { data: prod } = await supabase.from('products').select('*').order('id');
                 if (prod) products.value = prod;
-
-                const { data: sett } = await supabase
-                    .from('app_settings')
-                    .select('*')
-                    .eq('id', 'main')
-                    .single();
-
+                const { data: sett } = await supabase.from('app_settings').select('*').eq('id', 'main').single();
                 if (sett) {
                     settings.shippingFee = parseFloat(sett.shipping_fee) || 15;
                     settings.freeShippingThreshold = parseFloat(sett.free_shipping_threshold) || 200;
                     settings.whatsappNumber = sett.whatsapp_number || '';
                 }
-
                 isLoading.value = false;
             };
 
             onMounted(async () => {
-                if (!supabaseConfigured.value) {
-                    isLoading.value = false;
-                    return;
-                }
+                if (!supabaseConfigured.value) { isLoading.value = false; return; }
                 await loadData();
-
-                // Realtime
                 supabase.channel('realtime-products')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, loadData)
                     .subscribe();
-
                 supabase.channel('realtime-settings')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, loadData)
                     .subscribe();
             });
 
-            // 商品計算
+            // ===== Products =====
             const filteredProducts = computed(() => {
                 if (!searchQuery.value) return products.value;
                 const q = searchQuery.value.toLowerCase();
-                return products.value.filter(p => p.name.toLowerCase().includes(q));
+                return products.value.filter(p =>
+                    p.name.toLowerCase().includes(q) ||
+                    (p.description || '').toLowerCase().includes(q)
+                );
             });
 
-            const calculatePrice = (p) => (p.price * (1 - (p.discount || 0)/100)).toFixed(2);
+            const calculatePrice = (p) =>
+                (parseFloat(p.price) * (1 - (parseFloat(p.discount) || 0) / 100)).toFixed(2);
 
+            // ===== Cart =====
             const addToCart = (product) => {
                 if (product.stock <= 0) return;
                 const exist = cart.value.find(i => i.id === product.id);
                 if (exist) exist.quantity++;
                 else cart.value.push({ ...product, finalPrice: calculatePrice(product), quantity: 1 });
+                showToast(t('addedToCart'));
             };
 
             const updateQuantity = (index, change) => {
@@ -596,36 +727,58 @@
 
             const removeFromCart = (index) => cart.value.splice(index, 1);
 
-            // Admin
+            const cartCount = computed(() => cart.value.reduce((a, c) => a + c.quantity, 0));
+            const cartSubtotal = computed(() => cart.value.reduce((a, c) => a + parseFloat(c.finalPrice) * c.quantity, 0));
+            const pickupDiscount = computed(() => order.shippingMethod === 'pickup' ? cartSubtotal.value * 0.03 : 0);
+            const isFreeShipping = computed(() => cartSubtotal.value >= settings.freeShippingThreshold);
+            const currentShippingFee = computed(() => {
+                if (order.shippingMethod === 'pickup') return 0;
+                if (order.shippingMethod === 'custom') return parseFloat(settings.shippingFee);
+                return isFreeShipping.value ? 0 : parseFloat(settings.shippingFee);
+            });
+            const cartTotal = computed(() => cartSubtotal.value - pickupDiscount.value + currentShippingFee.value);
+
+            // ===== Admin =====
             const handleLogin = () => {
                 if (loginForm.username === 'admin' && loginForm.password === 'admin') {
-                    view.value = 'admin-dashboard';
-                    isAdmin.value = true;
-                } else alert('帳號或密碼錯誤');
+                    view.value = 'admin-dashboard'; isAdmin.value = true;
+                } else showToast(t('loginError'), 'error');
             };
 
-            const logout = () => {
-                view.value = 'home';
-                isAdmin.value = false;
-            };
+            const logout = () => { view.value = 'home'; isAdmin.value = false; };
 
             const saveProduct = async () => {
+                if (!productForm.name || !productForm.price) { showToast(t('fillRequired'), 'error'); return; }
+                const payload = {
+                    name: productForm.name,
+                    price: parseFloat(productForm.price),
+                    stock: parseInt(productForm.stock) || 0,
+                    discount: parseFloat(productForm.discount) || 0,
+                    image: productForm.image || '',
+                    description: productForm.description || ''
+                };
                 if (isEditing.value) {
-                    await supabase.from('products').update(productForm).eq('id', productForm.id);
+                    await supabase.from('products').update(payload).eq('id', productForm.id);
+                    showToast(t('productUpdated'));
                 } else {
-                    await supabase.from('products').insert([productForm]);
+                    await supabase.from('products').insert([payload]);
+                    showToast(t('productSaved'));
                 }
                 resetForm();
+                await loadData();
             };
 
             const editProduct = (p) => {
                 Object.assign(productForm, p);
                 isEditing.value = true;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const deleteProduct = async (id) => {
-                if (confirm('確定刪除？')) {
+                if (confirm(t('confirmDelete'))) {
                     await supabase.from('products').delete().eq('id', id);
+                    showToast(t('productDeleted'));
+                    await loadData();
                 }
             };
 
@@ -637,76 +790,149 @@
             const saveSettings = async () => {
                 await supabase.from('app_settings').upsert({
                     id: 'main',
-                    shipping_fee: settings.shippingFee,
-                    free_shipping_threshold: settings.freeShippingThreshold,
+                    shipping_fee: parseFloat(settings.shippingFee),
+                    free_shipping_threshold: parseFloat(settings.freeShippingThreshold),
                     whatsapp_number: settings.whatsappNumber
                 });
-                alert('設定儲存成功！');
+                showToast(t('saved'));
             };
 
-            // 購物車計算
-            const cartCount = computed(() => cart.value.reduce((a, c) => a + c.quantity, 0));
-            const cartSubtotal = computed(() => cart.value.reduce((a, c) => a + c.finalPrice * c.quantity, 0));
-            const pickupDiscount = computed(() => order.shippingMethod === 'pickup' ? cartSubtotal.value * 0.03 : 0);
-            const isFreeShipping = computed(() => cartSubtotal.value >= settings.freeShippingThreshold);
-            const currentShippingFee = computed(() => {
-                if (order.shippingMethod === 'pickup') return 0;
-                return isFreeShipping.value ? 0 : settings.shippingFee;
-            });
-            const cartTotal = computed(() => cartSubtotal.value - pickupDiscount.value + currentShippingFee.value);
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => { productForm.image = ev.target.result; };
+                reader.readAsDataURL(file);
+            };
 
-            // === 你原本的核心函數（已補齊）===
+            // ===== WhatsApp =====
             const generateOrderText = () => {
-                let text = `*New Order - PetFood Mart*\n\n`;
-                text += `*商品：*\n`;
+                let text = `*🐾 New Order - PetFood Mart*\n\n`;
+                text += `*📦 商品清单：*\n`;
                 cart.value.forEach(item => {
-                    text += `- ${item.name} ×${item.quantity} (RM ${item.finalPrice})\n`;
+                    text += `  • ${item.name} ×${item.quantity} @ RM ${item.finalPrice} = RM ${(parseFloat(item.finalPrice) * item.quantity).toFixed(2)}\n`;
                 });
-                text += `\n*小計：* RM ${cartSubtotal.value.toFixed(2)}\n`;
-
+                text += `\n*小计：* RM ${cartSubtotal.value.toFixed(2)}\n`;
                 if (order.shippingMethod === 'pickup') {
-                    text += `*方式：* 自取 (-3%)\n`;
-                    text += `*折扣：* -RM ${pickupDiscount.value.toFixed(2)}\n`;
+                    text += `*配送方式：* 🏪 到店自取（-3%）\n`;
+                    text += `*优惠折扣：* -RM ${pickupDiscount.value.toFixed(2)}\n`;
                 } else {
-                    text += `*方式：* ${order.shippingMethod === 'delivery' ? '標準配送' : '自訂配送'}\n`;
-                    text += `*運費：* RM ${currentShippingFee.value.toFixed(2)}\n`;
-                    text += `*收件人：* ${order.name}\n*電話：* ${order.phone}\n*地址：* ${order.address}\n`;
+                    const method = order.shippingMethod === 'delivery' ? '🚚 标准配送' : '📦 自定义配送';
+                    text += `*配送方式：* ${method}\n`;
+                    text += `*运费：* RM ${currentShippingFee.value.toFixed(2)}\n`;
+                    text += `\n*收件人：* ${order.name}\n*电话：* ${order.phone}\n*地址：* ${order.address}\n`;
                 }
-                text += `\n*總計：* RM ${cartTotal.value.toFixed(2)}`;
+                text += `\n*💰 合计：* RM ${cartTotal.value.toFixed(2)}`;
                 return text;
             };
 
-            const cleanPhoneNumber = (num) => num ? num.replace(/\D/g, '') : '';
+            const cleanPhone = (num) => num ? num.replace(/\D/g, '') : '';
 
             const sendToWhatsApp = () => {
-                if (['delivery','custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
-                    alert('請填寫收件人資訊');
-                    return;
+                if (['delivery', 'custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
+                    showToast(t('fillDelivery'), 'error'); return;
                 }
                 const text = encodeURIComponent(generateOrderText());
-                const number = cleanPhoneNumber(settings.whatsappNumber);
-                const url = number ? `https://wa.me/${number}?text=${text}` : `https://wa.me/?text=${text}`;
-                window.open(url, '_blank');
+                const number = cleanPhone(settings.whatsappNumber);
+                window.open(number ? `https://wa.me/${number}?text=${text}` : `https://wa.me/?text=${text}`, '_blank');
             };
 
             const openWhatsAppChat = () => {
-                const number = cleanPhoneNumber(settings.whatsappNumber);
-                const msg = encodeURIComponent(lang.value === 'zh' ? '你好，我想詢問商品資訊' : 'Hi, I want to ask about products');
-                const url = number ? `https://wa.me/${number}?text=${msg}` : `https://wa.me/?text=${msg}`;
-                window.open(url, '_blank');
+                const number = cleanPhone(settings.whatsappNumber);
+                const msg = encodeURIComponent(lang.value === 'zh' ? '您好，我想咨询商品信息 🐾' : 'Hi, I want to ask about your pet food products 🐾');
+                window.open(number ? `https://wa.me/${number}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank');
             };
 
+            // ===== PDF =====
             const generatePDF = () => {
-                if (['delivery','custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
-                    alert('請填寫收件人資訊');
-                    return;
+                if (['delivery', 'custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
+                    showToast(t('fillDelivery'), 'error'); return;
                 }
                 const doc = new jsPDF();
-                // PDF 內容生成邏輯（保持你原本的）
-                doc.setFontSize(20);
-                doc.text("PetFood Mart", 20, 20);
-                // ... 你可以之後再優化 PDF 部分 ...
-                doc.save("PetFoodMart-Order.pdf");
+                const now = new Date();
+                const orderNum = Math.floor(Math.random() * 90000) + 10000;
+
+                // Header background
+                doc.setFillColor(249, 115, 22);
+                doc.rect(0, 0, 210, 40, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(24);
+                doc.setFont('helvetica', 'bold');
+                doc.text('PetFood Mart', 14, 18);
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'normal');
+                doc.text('Order Receipt', 14, 30);
+                doc.text(`Date: ${now.toLocaleDateString('en-MY')} ${now.toLocaleTimeString()}`, 110, 18);
+                doc.text(`Order No: #${orderNum}`, 110, 28);
+
+                doc.setTextColor(50, 50, 50);
+                let y = 55;
+
+                // Delivery Info
+                if (['delivery', 'custom'].includes(order.shippingMethod)) {
+                    doc.setFillColor(255, 247, 237);
+                    doc.rect(10, y - 5, 190, 32, 'F');
+                    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+                    doc.text('Delivery Information', 14, y);
+                    y += 8;
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+                    doc.text(`Name: ${order.name}`, 14, y); y += 7;
+                    doc.text(`Phone: ${order.phone}`, 14, y); y += 7;
+                    doc.text(`Address: ${order.address}`, 14, y); y += 12;
+                }
+
+                // Items Table
+                const tableData = cart.value.map(item => [
+                    item.name,
+                    `RM ${item.finalPrice}`,
+                    `x${item.quantity}`,
+                    `RM ${(parseFloat(item.finalPrice) * item.quantity).toFixed(2)}`
+                ]);
+
+                doc.autoTable({
+                    startY: y,
+                    head: [['Product Name', 'Unit Price', 'Qty', 'Total']],
+                    body: tableData,
+                    headStyles: { fillColor: [249, 115, 22], textColor: 255, fontStyle: 'bold' },
+                    alternateRowStyles: { fillColor: [255, 247, 237] },
+                    styles: { fontSize: 10, cellPadding: 4 },
+                    columnStyles: { 0: { cellWidth: 90 }, 3: { halign: 'right' } }
+                });
+
+                let finalY = doc.lastAutoTable.finalY + 12;
+
+                // Summary box
+                doc.setFillColor(249, 249, 249);
+                doc.rect(120, finalY - 5, 80, order.shippingMethod === 'pickup' ? 36 : 30, 'F');
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 80, 80);
+                doc.text(`Subtotal:`, 124, finalY);
+                doc.text(`RM ${cartSubtotal.value.toFixed(2)}`, 196, finalY, { align: 'right' });
+                finalY += 8;
+
+                if (order.shippingMethod === 'pickup') {
+                    doc.setTextColor(22, 163, 74);
+                    doc.text(`Self Pickup (-3%):`, 124, finalY);
+                    doc.text(`-RM ${pickupDiscount.value.toFixed(2)}`, 196, finalY, { align: 'right' });
+                    doc.setTextColor(80, 80, 80);
+                    finalY += 8;
+                } else {
+                    doc.text(`Shipping Fee:`, 124, finalY);
+                    doc.text(`RM ${currentShippingFee.value.toFixed(2)}`, 196, finalY, { align: 'right' });
+                    finalY += 8;
+                }
+
+                doc.setDrawColor(249, 115, 22);
+                doc.line(124, finalY, 196, finalY);
+                finalY += 6;
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(249, 115, 22);
+                doc.text('TOTAL:', 124, finalY);
+                doc.text(`RM ${cartTotal.value.toFixed(2)}`, 196, finalY, { align: 'right' });
+
+                // Footer
+                doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(180, 180, 180);
+                doc.text('Thank you for shopping at PetFood Mart! 🐾', 105, 285, { align: 'center' });
+
+                doc.save(`PetFoodMart-Order-${orderNum}.pdf`);
             };
 
             return {
@@ -717,7 +943,7 @@
                 settings, saveSettings,
                 loginForm, isAdmin, handleLogin, logout,
                 activeTab, productForm, isEditing, saveProduct, editProduct, deleteProduct, resetForm,
-                sendToWhatsApp, generatePDF, openWhatsAppChat
+                sendToWhatsApp, generatePDF, openWhatsAppChat, handleImageUpload, toast
             };
         }
     }).mount('#app');
