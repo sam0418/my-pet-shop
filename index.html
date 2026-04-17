@@ -564,191 +564,96 @@
 </div>
 
 <script type="module">
-    // ====================== SUPABASE 配置 ======================
-    const supabaseUrl = "https://oehiiqwunnfjvqkmxxen.supabase.co";
-    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9laGlpcXd1bm5manZxa214eGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxNDc1MzIsImV4cCI6MjA4NzcyMzUzMn0.JmHZeoGde5bEaSbGvptgKf3gzRDqUKuVgUyLHaN_pow';
-    const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-    // ===========================================================
+    import { isSupabaseConfigured, SUPABASE_CONFIG } from './js/config.js';
+    import { 
+        DEFAULT_SETTINGS, ADMIN_CREDENTIALS, PICKUP_DISCOUNT_RATE,
+        SHIPPING_METHODS, VIEWS, ADMIN_TABS, TOAST_TYPES, TOAST_DURATION
+    } from './js/utils/constants.js';
+    import { 
+        calculatePrice, cleanPhoneNumber, validateRequired, generateOrderNumber 
+    } from './js/utils/helpers.js';
+    import { useTranslation } from './js/composables/useTranslation.js';
+    import { useToast } from './js/composables/useToast.js';
+    import { useCart } from './js/composables/useCart.js';
+    import { useProducts } from './js/composables/useProducts.js';
+    import { useAdmin } from './js/composables/useAdmin.js';
+    import { useOrder } from './js/composables/useOrder.js';
+    import { supabaseService } from './js/services/supabaseService.js';
+    import { pdfService } from './js/services/pdfService.js';
 
-    const { createApp, ref, computed, reactive, onMounted } = Vue;
-    const { jsPDF } = window.jspdf;
+    const { createApp, ref } = Vue;
 
     createApp({
         setup() {
-            const view = ref('home');
-            const lang = ref('zh');
-            const activeTab = ref('products');
-            const searchQuery = ref('');
-            const isLoading = ref(true);
-            const supabaseConfigured = ref(supabaseUrl.includes('supabase.co'));
+            const view = ref(VIEWS.HOME);
+            const supabaseConfigured = ref(isSupabaseConfigured());
 
-            const products = ref([]);
-            const cart = ref([]);
-            const settings = reactive({ shippingFee: 15, freeShippingThreshold: 200, whatsappNumber: '' });
-            const order = reactive({ shippingMethod: 'pickup', name: '', phone: '', address: '' });
-            const loginForm = reactive({ username: '', password: '' });
-            const isAdmin = ref(false);
-            const productForm = reactive({ id: null, name: '', price: 0, stock: 0, discount: 0, image: '', description: '' });
-            const isEditing = ref(false);
-            const toast = reactive({ show: false, message: '', type: 'success' });
+            // 使用所有 Composables
+            const { lang, t, toggleLang } = useTranslation();
+            const { toast, showToast } = useToast();
+            const {
+                cart, settings, order,
+                cartCount, cartSubtotal, pickupDiscount,
+                isFreeShipping, currentShippingFee, cartTotal,
+                addToCart, updateQuantity, removeFromCart
+            } = useCart();
+            const {
+                products, searchQuery, isLoading, productForm, isEditing,
+                filteredProducts, loadProducts, saveProduct, deleteProduct,
+                editProduct, resetForm, handleImageUpload
+            } = useProducts();
+            const {
+                isAdmin, activeTab, loginForm,
+                validateLogin, saveSettings, loadSettings,
+                logout, resetLoginForm
+            } = useAdmin();
+            const { generateOrderText, openWhatsApp } = useOrder();
 
-            // ===== Translations =====
-            const translations = {
-                en: {
-                    products: 'Products', search: 'Search products...', add: 'Add to Cart',
-                    outOfStock: 'Out of Stock', stock: 'Stock', loading: 'Loading products...',
-                    noProducts: 'No products found',
-                    shoppingCart: 'Shopping Cart', emptyCart: 'Your cart is empty', backToShop: 'Back to Shop',
-                    orderSummary: 'Order Summary', shippingMethod: 'Shipping Method',
-                    selfPickup: 'Self Pickup', delivery: 'Standard Delivery',
-                    customDelivery: 'Custom Delivery', selfPay: 'Fee Apply',
-                    deliveryDetails: 'Delivery Details', name: 'Full Name',
-                    phone: 'Phone Number', address: 'Delivery Address',
-                    subtotal: 'Subtotal', discountPickup: 'Pickup Discount',
-                    shippingFee: 'Shipping Fee', free: 'Free!', total: 'Total',
-                    freeShippingOver: 'Free shipping for orders over',
-                    sendWhatsApp: 'Order via WhatsApp', downloadPDF: 'Download Receipt (PDF)',
-                    manageProducts: 'Products', settings: 'Settings', logout: 'Logout',
-                    addProduct: 'Add New Product', editProduct: 'Edit Product Details',
-                    prodName: 'Product Name', prodPrice: 'Price', prodStock: 'Stock Qty',
-                    prodDiscount: 'Discount', prodImage: 'Product Image',
-                    prodImageURL: 'Or paste Image URL here...',
-                    imageNote: 'Large images may affect performance.',
-                    prodDesc: 'Description', image: 'Image', price: 'Price',
-                    discount: 'Discount', actions: 'Actions', update: 'Update', cancel: 'Cancel',
-                    shippingSettings: 'Shipping & Store Settings', standardShippingFee: 'Standard Shipping Fee',
-                    freeShippingThreshold: 'Free Shipping Threshold',
-                    shopWhatsApp: 'Store WhatsApp Number',
-                    whatsappHint: 'Format: 60123456789 (country code, no +)',
-                    saveSettings: 'Save Settings',
-                    saved: 'Settings saved!', addedToCart: 'Added to cart!',
-                    confirmDelete: 'Are you sure to delete this product?',
-                    fillDelivery: 'Please fill in all delivery details.',
-                    loginError: 'Incorrect username or password.',
-                    productSaved: 'Product added!', productUpdated: 'Product updated!',
-                    productDeleted: 'Product deleted!', fillRequired: 'Please fill in name and price.',
-                },
-                zh: {
-                    products: '商品列表', search: '搜索商品...', add: '加入购物车',
-                    outOfStock: '已售罄', stock: '库存', loading: '正在加载商品...',
-                    noProducts: '没有找到商品',
-                    shoppingCart: '购物车', emptyCart: '购物车为空', backToShop: '继续购物',
-                    orderSummary: '订单摘要', shippingMethod: '配送方式',
-                    selfPickup: '到店自取', delivery: '物流配送（标准）',
-                    customDelivery: '自定义物流配送', selfPay: '自付运费',
-                    deliveryDetails: '收件人信息', name: '姓名',
-                    phone: '手机号码', address: '收货地址',
-                    subtotal: '小计', discountPickup: '自取优惠',
-                    shippingFee: '运费', free: '免运费！', total: '合计',
-                    freeShippingOver: '满额免运：',
-                    sendWhatsApp: 'WhatsApp 下单', downloadPDF: '下载订单 PDF',
-                    manageProducts: '商品管理', settings: '设置', logout: '退出登录',
-                    addProduct: '新增商品', editProduct: '编辑商品信息',
-                    prodName: '商品名称', prodPrice: '价格', prodStock: '库存数量',
-                    prodDiscount: '折扣', prodImage: '商品图片',
-                    prodImageURL: '或粘贴图片链接...',
-                    imageNote: '注意：上传大图可能影响性能。',
-                    prodDesc: '商品描述', image: '图片', price: '价格',
-                    discount: '折扣', actions: '操作', update: '更新', cancel: '取消',
-                    shippingSettings: '物流与店铺设置', standardShippingFee: '标准运费',
-                    freeShippingThreshold: '免运门槛',
-                    shopWhatsApp: '店家 WhatsApp 号码',
-                    whatsappHint: '例如：60123456789（含国家代码，无 + 号）',
-                    saveSettings: '保存设置',
-                    saved: '设置已保存！', addedToCart: '已加入购物车！',
-                    confirmDelete: '确定要删除该商品吗？',
-                    fillDelivery: '请填写所有收件人信息。',
-                    loginError: '账号或密码错误。',
-                    productSaved: '商品已添加！', productUpdated: '商品已更新！',
-                    productDeleted: '商品已删除！', fillRequired: '请填写商品名称和价格。',
+            // 初始化
+            const onMounted = async () => {
+                if (!supabaseConfigured.value) return;
+
+                await loadProducts();
+                const settingsData = await loadSettings();
+                if (settingsData) {
+                    settings.shippingFee = parseFloat(settingsData.shipping_fee) || 15;
+                    settings.freeShippingThreshold = parseFloat(settingsData.free_shipping_threshold) || 200;
+                    settings.whatsappNumber = settingsData.whatsapp_number || '';
                 }
+
+                // 訂閱實時更新
+                supabaseService.subscribeToProducts(() => loadProducts());
+                supabaseService.subscribeToSettings(() => loadSettings());
             };
 
-            const t = (key) => translations[lang.value]?.[key] || key;
-            const toggleLang = () => lang.value = lang.value === 'zh' ? 'en' : 'zh';
-
-            // ===== Toast =====
-            const showToast = (message, type = 'success') => {
-                toast.show = true; toast.message = message; toast.type = type;
-                setTimeout(() => { toast.show = false; }, 3000);
-            };
-
-            // ===== Load Data =====
-            const loadData = async () => {
-                isLoading.value = true;
-                const { data: prod } = await supabase.from('products').select('*').order('id');
-                if (prod) products.value = prod;
-                const { data: sett } = await supabase.from('app_settings').select('*').eq('id', 'main').single();
-                if (sett) {
-                    settings.shippingFee = parseFloat(sett.shipping_fee) || 15;
-                    settings.freeShippingThreshold = parseFloat(sett.free_shipping_threshold) || 200;
-                    settings.whatsappNumber = sett.whatsapp_number || '';
-                }
-                isLoading.value = false;
-            };
-
-            onMounted(async () => {
-                if (!supabaseConfigured.value) { isLoading.value = false; return; }
-                await loadData();
-                supabase.channel('realtime-products')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, loadData)
-                    .subscribe();
-                supabase.channel('realtime-settings')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, loadData)
-                    .subscribe();
-            });
-
-            // ===== Products =====
-            const filteredProducts = computed(() => {
-                if (!searchQuery.value) return products.value;
-                const q = searchQuery.value.toLowerCase();
-                return products.value.filter(p =>
-                    p.name.toLowerCase().includes(q) ||
-                    (p.description || '').toLowerCase().includes(q)
-                );
-            });
-
-            const calculatePrice = (p) =>
-                (parseFloat(p.price) * (1 - (parseFloat(p.discount) || 0) / 100)).toFixed(2);
-
-            // ===== Cart =====
-            const addToCart = (product) => {
-                if (product.stock <= 0) return;
-                const exist = cart.value.find(i => i.id === product.id);
-                if (exist) exist.quantity++;
-                else cart.value.push({ ...product, finalPrice: calculatePrice(product), quantity: 1 });
-                showToast(t('addedToCart'));
-            };
-
-            const updateQuantity = (index, change) => {
-                cart.value[index].quantity += change;
-                if (cart.value[index].quantity <= 0) cart.value.splice(index, 1);
-            };
-
-            const removeFromCart = (index) => cart.value.splice(index, 1);
-
-            const cartCount = computed(() => cart.value.reduce((a, c) => a + c.quantity, 0));
-            const cartSubtotal = computed(() => cart.value.reduce((a, c) => a + parseFloat(c.finalPrice) * c.quantity, 0));
-            const pickupDiscount = computed(() => order.shippingMethod === 'pickup' ? cartSubtotal.value * 0.03 : 0);
-            const isFreeShipping = computed(() => cartSubtotal.value >= settings.freeShippingThreshold);
-            const currentShippingFee = computed(() => {
-                if (order.shippingMethod === 'pickup') return 0;
-                if (order.shippingMethod === 'custom') return parseFloat(settings.shippingFee);
-                return isFreeShipping.value ? 0 : parseFloat(settings.shippingFee);
-            });
-            const cartTotal = computed(() => cartSubtotal.value - pickupDiscount.value + currentShippingFee.value);
-
-            // ===== Admin =====
+            // 事件處理器
             const handleLogin = () => {
-                if (loginForm.username === 'admin' && loginForm.password === 'admin') {
-                    view.value = 'admin-dashboard'; isAdmin.value = true;
-                } else showToast(t('loginError'), 'error');
+                if (validateLogin(loginForm.username, loginForm.password)) {
+                    view.value = VIEWS.ADMIN_DASHBOARD;
+                    isAdmin.value = true;
+                    resetLoginForm();
+                } else {
+                    showToast(t('loginError'), TOAST_TYPES.ERROR);
+                }
             };
 
-            const logout = () => { view.value = 'home'; isAdmin.value = false; };
+            const handleLogout = () => {
+                logout();
+                view.value = VIEWS.HOME;
+            };
 
-            const saveProduct = async () => {
-                if (!productForm.name || !productForm.price) { showToast(t('fillRequired'), 'error'); return; }
+            const handleAddToCart = (product) => {
+                if (addToCart(product)) {
+                    showToast(t('addedToCart'), TOAST_TYPES.SUCCESS);
+                }
+            };
+
+            const handleSaveProduct = async () => {
+                if (!productForm.name || !productForm.price) {
+                    showToast(t('fillRequired'), TOAST_TYPES.ERROR);
+                    return;
+                }
+
                 const payload = {
                     name: productForm.name,
                     price: parseFloat(productForm.price),
@@ -757,193 +662,103 @@
                     image: productForm.image || '',
                     description: productForm.description || ''
                 };
-                if (isEditing.value) {
-                    await supabase.from('products').update(payload).eq('id', productForm.id);
-                    showToast(t('productUpdated'));
-                } else {
-                    await supabase.from('products').insert([payload]);
-                    showToast(t('productSaved'));
+
+                try {
+                    await saveProduct(payload);
+                    await loadProducts();
+                    resetForm();
+                    showToast(
+                        isEditing.value ? t('productUpdated') : t('productSaved'),
+                        TOAST_TYPES.SUCCESS
+                    );
+                } catch (error) {
+                    showToast('Failed to save product', TOAST_TYPES.ERROR);
                 }
-                resetForm();
-                await loadData();
             };
 
-            const editProduct = (p) => {
-                Object.assign(productForm, p);
-                isEditing.value = true;
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
-
-            const deleteProduct = async (id) => {
+            const handleDeleteProduct = async (id) => {
                 if (confirm(t('confirmDelete'))) {
-                    await supabase.from('products').delete().eq('id', id);
-                    showToast(t('productDeleted'));
-                    await loadData();
+                    try {
+                        await deleteProduct(id);
+                        await loadProducts();
+                        showToast(t('productDeleted'), TOAST_TYPES.SUCCESS);
+                    } catch (error) {
+                        showToast('Failed to delete product', TOAST_TYPES.ERROR);
+                    }
                 }
             };
 
-            const resetForm = () => {
-                Object.assign(productForm, { id: null, name: '', price: 0, stock: 0, discount: 0, image: '', description: '' });
-                isEditing.value = false;
+            const handleSaveSettings = async () => {
+                try {
+                    await saveSettings(settings);
+                    showToast(t('saved'), TOAST_TYPES.SUCCESS);
+                } catch (error) {
+                    showToast('Failed to save settings', TOAST_TYPES.ERROR);
+                }
             };
 
-            const saveSettings = async () => {
-                await supabase.from('app_settings').upsert({
-                    id: 'main',
-                    shipping_fee: parseFloat(settings.shippingFee),
-                    free_shipping_threshold: parseFloat(settings.freeShippingThreshold),
-                    whatsapp_number: settings.whatsappNumber
-                });
-                showToast(t('saved'));
-            };
-
-            const handleImageUpload = (e) => {
+            const handleImageUploadEvent = async (e) => {
                 const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => { productForm.image = ev.target.result; };
-                reader.readAsDataURL(file);
+                if (file) {
+                    await handleImageUpload(file);
+                }
             };
 
-            // ===== WhatsApp =====
-            const generateOrderText = () => {
-                let text = `*🐾 New Order - PetFood Mart*\n\n`;
-                text += `*📦 商品清单：*\n`;
-                cart.value.forEach(item => {
-                    text += `  • ${item.name} ×${item.quantity} @ RM ${item.finalPrice} = RM ${(parseFloat(item.finalPrice) * item.quantity).toFixed(2)}\n`;
-                });
-                text += `\n*小计：* RM ${cartSubtotal.value.toFixed(2)}\n`;
-                if (order.shippingMethod === 'pickup') {
-                    text += `*配送方式：* 🏪 到店自取（-3%）\n`;
-                    text += `*优惠折扣：* -RM ${pickupDiscount.value.toFixed(2)}\n`;
-                } else {
-                    const method = order.shippingMethod === 'delivery' ? '🚚 标准配送' : '📦 自定义配送';
-                    text += `*配送方式：* ${method}\n`;
-                    text += `*运费：* RM ${currentShippingFee.value.toFixed(2)}\n`;
-                    text += `\n*收件人：* ${order.name}\n*电话：* ${order.phone}\n*地址：* ${order.address}\n`;
+            const handleSendToWhatsApp = () => {
+                if ([SHIPPING_METHODS.DELIVERY, SHIPPING_METHODS.CUSTOM].includes(order.shippingMethod)) {
+                    if (!validateRequired(order, ['name', 'phone', 'address'])) {
+                        showToast(t('fillDelivery'), TOAST_TYPES.ERROR);
+                        return;
+                    }
                 }
-                text += `\n*💰 合计：* RM ${cartTotal.value.toFixed(2)}`;
-                return text;
+
+                const orderText = generateOrderText(
+                    cart, order, cartSubtotal.value,
+                    pickupDiscount.value, currentShippingFee.value, cartTotal.value, lang.value
+                );
+                openWhatsApp(settings.whatsappNumber, orderText);
             };
 
-            const cleanPhone = (num) => num ? num.replace(/\D/g, '') : '';
-
-            const sendToWhatsApp = () => {
-                if (['delivery', 'custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
-                    showToast(t('fillDelivery'), 'error'); return;
+            const handleGeneratePDF = () => {
+                if ([SHIPPING_METHODS.DELIVERY, SHIPPING_METHODS.CUSTOM].includes(order.shippingMethod)) {
+                    if (!validateRequired(order, ['name', 'phone', 'address'])) {
+                        showToast(t('fillDelivery'), TOAST_TYPES.ERROR);
+                        return;
+                    }
                 }
-                const text = encodeURIComponent(generateOrderText());
-                const number = cleanPhone(settings.whatsappNumber);
-                window.open(number ? `https://wa.me/${number}?text=${text}` : `https://wa.me/?text=${text}`, '_blank');
+
+                pdfService.generateOrderPDF(
+                    cart, order, cartSubtotal.value,
+                    pickupDiscount.value, currentShippingFee.value, cartTotal.value
+                );
             };
 
-            const openWhatsAppChat = () => {
-                const number = cleanPhone(settings.whatsappNumber);
-                const msg = encodeURIComponent(lang.value === 'zh' ? '您好，我想咨询商品信息 🐾' : 'Hi, I want to ask about your pet food products 🐾');
-                window.open(number ? `https://wa.me/${number}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank');
+            const handleOpenWhatsAppChat = () => {
+                const msg = lang.value === 'zh' ? '您好，我想咨询商品信息 🐾' : 'Hi, I want to ask about your pet food products 🐾';
+                openWhatsApp(settings.whatsappNumber, msg);
             };
 
-            // ===== PDF =====
-            const generatePDF = () => {
-                if (['delivery', 'custom'].includes(order.shippingMethod) && (!order.name || !order.phone || !order.address)) {
-                    showToast(t('fillDelivery'), 'error'); return;
-                }
-                const doc = new jsPDF();
-                const now = new Date();
-                const orderNum = Math.floor(Math.random() * 90000) + 10000;
-
-                // Header background
-                doc.setFillColor(249, 115, 22);
-                doc.rect(0, 0, 210, 40, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(24);
-                doc.setFont('helvetica', 'bold');
-                doc.text('PetFood Mart', 14, 18);
-                doc.setFontSize(11);
-                doc.setFont('helvetica', 'normal');
-                doc.text('Order Receipt', 14, 30);
-                doc.text(`Date: ${now.toLocaleDateString('en-MY')} ${now.toLocaleTimeString()}`, 110, 18);
-                doc.text(`Order No: #${orderNum}`, 110, 28);
-
-                doc.setTextColor(50, 50, 50);
-                let y = 55;
-
-                // Delivery Info
-                if (['delivery', 'custom'].includes(order.shippingMethod)) {
-                    doc.setFillColor(255, 247, 237);
-                    doc.rect(10, y - 5, 190, 32, 'F');
-                    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-                    doc.text('Delivery Information', 14, y);
-                    y += 8;
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-                    doc.text(`Name: ${order.name}`, 14, y); y += 7;
-                    doc.text(`Phone: ${order.phone}`, 14, y); y += 7;
-                    doc.text(`Address: ${order.address}`, 14, y); y += 12;
-                }
-
-                // Items Table
-                const tableData = cart.value.map(item => [
-                    item.name,
-                    `RM ${item.finalPrice}`,
-                    `x${item.quantity}`,
-                    `RM ${(parseFloat(item.finalPrice) * item.quantity).toFixed(2)}`
-                ]);
-
-                doc.autoTable({
-                    startY: y,
-                    head: [['Product Name', 'Unit Price', 'Qty', 'Total']],
-                    body: tableData,
-                    headStyles: { fillColor: [249, 115, 22], textColor: 255, fontStyle: 'bold' },
-                    alternateRowStyles: { fillColor: [255, 247, 237] },
-                    styles: { fontSize: 10, cellPadding: 4 },
-                    columnStyles: { 0: { cellWidth: 90 }, 3: { halign: 'right' } }
-                });
-
-                let finalY = doc.lastAutoTable.finalY + 12;
-
-                // Summary box
-                doc.setFillColor(249, 249, 249);
-                doc.rect(120, finalY - 5, 80, order.shippingMethod === 'pickup' ? 36 : 30, 'F');
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 80, 80);
-                doc.text(`Subtotal:`, 124, finalY);
-                doc.text(`RM ${cartSubtotal.value.toFixed(2)}`, 196, finalY, { align: 'right' });
-                finalY += 8;
-
-                if (order.shippingMethod === 'pickup') {
-                    doc.setTextColor(22, 163, 74);
-                    doc.text(`Self Pickup (-3%):`, 124, finalY);
-                    doc.text(`-RM ${pickupDiscount.value.toFixed(2)}`, 196, finalY, { align: 'right' });
-                    doc.setTextColor(80, 80, 80);
-                    finalY += 8;
-                } else {
-                    doc.text(`Shipping Fee:`, 124, finalY);
-                    doc.text(`RM ${currentShippingFee.value.toFixed(2)}`, 196, finalY, { align: 'right' });
-                    finalY += 8;
-                }
-
-                doc.setDrawColor(249, 115, 22);
-                doc.line(124, finalY, 196, finalY);
-                finalY += 6;
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(249, 115, 22);
-                doc.text('TOTAL:', 124, finalY);
-                doc.text(`RM ${cartTotal.value.toFixed(2)}`, 196, finalY, { align: 'right' });
-
-                // Footer
-                doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(180, 180, 180);
-                doc.text('Thank you for shopping at PetFood Mart! 🐾', 105, 285, { align: 'center' });
-
-                doc.save(`PetFoodMart-Order-${orderNum}.pdf`);
-            };
+            // 初始化數據
+            const { onMounted: vueOnMounted } = Vue;
+            vueOnMounted(onMounted);
 
             return {
-                view, lang, t, toggleLang, searchQuery, isLoading, supabaseConfigured,
-                products, filteredProducts, calculatePrice,
-                cart, cartCount, addToCart, updateQuantity, removeFromCart,
-                order, cartSubtotal, pickupDiscount, isFreeShipping, currentShippingFee, cartTotal,
-                settings, saveSettings,
-                loginForm, isAdmin, handleLogin, logout,
-                activeTab, productForm, isEditing, saveProduct, editProduct, deleteProduct, resetForm,
-                sendToWhatsApp, generatePDF, openWhatsAppChat, handleImageUpload, toast
+                view, lang, t, toggleLang,
+                toast, supabaseConfigured,
+                cart, settings, order,
+                cartCount, cartSubtotal, pickupDiscount,
+                isFreeShipping, currentShippingFee, cartTotal,
+                updateQuantity, removeFromCart,
+                products, searchQuery, isLoading,
+                filteredProducts, editProduct, resetForm,
+                productForm, isEditing,
+                isAdmin, activeTab, loginForm,
+                calculatePrice,
+                handleLogin, handleLogout,
+                handleAddToCart, handleSaveProduct, handleDeleteProduct, handleImageUploadEvent,
+                handleSaveSettings,
+                handleSendToWhatsApp, handleGeneratePDF, handleOpenWhatsAppChat,
+                VIEWS, ADMIN_TABS
             };
         }
     }).mount('#app');
