@@ -10,6 +10,7 @@ require('dotenv').config();
 const { authenticateToken, generateToken, JWT_SECRET } = require('./middleware/auth');
 const { validateRequest, productSchema, settingsSchema, loginSchema } = require('./middleware/validation');
 const { errorHandler, notFoundHandler, asyncHandler } = require('./middleware/errorHandler');
+const { cacheMiddleware, invalidateCache } = require('./middleware/cache');
 
 const app = express();
 
@@ -114,12 +115,65 @@ app.post('/api/auth/login', validateRequest(loginSchema), asyncHandler(async (re
 // ===== 公開 API =====
 
 /**
- * 獲取所有商品
- * GET /api/products
+ * 獲取所有商品（支持分頁）
+ * GET /api/products?page=1&limit=20&sort=created_at&order=DESC
+ * 
+ * 查詢參數:
+ * - page: 頁碼 (預設: 1)
+ * - limit: 每頁筆數 (預設: 20, 最大: 100)
+ * - sort: 排序欄位 (預設: id)
+ * - order: 排序順序 (ASC/DESC, 預設: ASC)
+ * 
+ * 快取: 5分鐘 (300秒)
  */
-app.get('/api/products', asyncHandler(async (req, res) => {
-  const result = await pool.query('SELECT * FROM products ORDER BY id');
-  res.json(result.rows);
+app.get('/api/products', cacheMiddleware(300), asyncHandler(async (req, res) => {
+  // 解析分頁參數
+  let page = parseInt(req.query.page) || 1;
+  let limit = parseInt(req.query.limit) || 20;
+  const sort = req.query.sort || 'id';
+  const order = (req.query.order || 'ASC').toUpperCase();
+  
+  // 驗證參數
+  if (page < 1) page = 1;
+  if (limit < 1) limit = 1;
+  if (limit > 100) limit = 100; // 防止過大查詢
+  
+  // 驗證排序欄位（防止SQL注入）
+  const allowedSortFields = ['id', 'name', 'price', 'stock', 'discount', 'created_at', 'updated_at'];
+  if (!allowedSortFields.includes(sort)) {
+    return res.status(400).json({ error: 'Invalid sort field' });
+  }
+  
+  if (!['ASC', 'DESC'].includes(order)) {
+    return res.status(400).json({ error: 'Invalid order value. Use ASC or DESC' });
+  }
+  
+  const offset = (page - 1) * limit;
+  
+  // 獲取商品和總數
+  const [countResult, dataResult] = await Promise.all([
+    pool.query('SELECT COUNT(*) as total FROM products'),
+    pool.query(
+      `SELECT * FROM products ORDER BY "${sort}" ${order} LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    )
+  ]);
+  
+  const total = parseInt(countResult.rows[0].total);
+  const totalPages = Math.ceil(total / limit);
+  
+  // 返回分頁結果
+  res.json({
+    data: dataResult.rows,
+    pagination: {
+      current_page: page,
+      total_items: total,
+      per_page: limit,
+      total_pages: totalPages,
+      has_next: page < totalPages,
+      has_prev: page > 1
+    }
+  });
 }));
 
 /**
@@ -144,8 +198,9 @@ app.get('/api/products/:id', asyncHandler(async (req, res) => {
 /**
  * 獲取設置
  * GET /api/settings
+ * 快取: 10分鐘 (600秒)
  */
-app.get('/api/settings', asyncHandler(async (req, res) => {
+app.get('/api/settings', cacheMiddleware(600), asyncHandler(async (req, res) => {
   const result = await pool.query('SELECT * FROM app_settings WHERE id=$1', ['main']);
   if (result.rows.length === 0) {
     return res.json({
@@ -171,6 +226,10 @@ app.post('/api/products', authenticateToken, validateRequest(productSchema), asy
     'INSERT INTO products (name, price, stock, discount, image, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
     [name, price, stock, discount, image, description]
   );
+  
+  // 清除相關快取
+  invalidateCache('GET:/api/products.*');
+  
   res.status(201).json(result.rows[0]);
 }));
 
@@ -194,6 +253,10 @@ app.put('/api/products/:id', authenticateToken, validateRequest(productSchema), 
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Product not found' });
   }
+  
+  // 清除相關快取
+  invalidateCache('GET:/api/products.*');
+  
   res.json(result.rows[0]);
 }));
 
@@ -212,6 +275,10 @@ app.delete('/api/products/:id', authenticateToken, asyncHandler(async (req, res)
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Product not found' });
   }
+  
+  // 清除相關快取
+  invalidateCache('GET:/api/products.*');
+  
   res.json({ success: true, id: result.rows[0].id });
 }));
 
@@ -226,6 +293,10 @@ app.post('/api/settings', authenticateToken, validateRequest(settingsSchema), as
     'INSERT INTO app_settings (id, shipping_fee, free_shipping_threshold, whatsapp_number) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET shipping_fee=$2, free_shipping_threshold=$3, whatsapp_number=$4, updated_at=now() RETURNING *',
     ['main', shipping_fee, free_shipping_threshold, whatsapp_number]
   );
+  
+  // 清除相關快取
+  invalidateCache('GET:/api/settings.*');
+  
   res.json(result.rows[0]);
 }));
 
