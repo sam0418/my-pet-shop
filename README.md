@@ -23,15 +23,25 @@ Vue 3 + Supabase 的寵物食品線上商店，支援商品管理、購物車、
 ### 後端服務
 | 技術 | 說明 |
 |------|------|
-| **Supabase** | 開源 Firebase 替代品，基於 PostgreSQL |
+| **Node.js / Express** | 輕量級後端框架 |
 | **PostgreSQL** | 強大的關係型數據庫 |
-| **Realtime** | WebSocket 實時訂閱，數據變化即時通知 |
+| **JWT** | JSON Web Token 安全認證 |
+| **Supabase** | 開源 Firebase 替代品（可選） |
+
+### 安全和驗證
+| 技術 | 說明 |
+|------|------|
+| **jsonwebtoken** | JWT 令牌生成和驗證 |
+| **bcryptjs** | 密碼雜湊和驗證 |
+| **joi** | 強大的輸入驗證 |
+| **express-rate-limit** | 請求頻率限制 |
 
 ### 工具庫
 | 技術 | 說明 |
 |------|------|
 | **jsPDF** | PDF 文檔生成庫 |
 | **AutoTable** | jsPDF 表格插件 |
+| **Morgan** | HTTP 請求日誌記錄 |
 
 ## 📁 專案結構
 
@@ -211,20 +221,75 @@ LOCAL_API_BASE_URL=http://localhost:3001
 
 **後端環境** (`backend/.env`)
 ```
+# 資料庫配置
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_HOST=db
 DB_PORT=5432
 DB_NAME=petfood
+
+# JWT 安全設定
+JWT_SECRET=your-secret-key-change-in-production
+
+# 伺服器配置
 PORT=3001
 NODE_ENV=development
+
+# CORS 白名單（以逗號分隔）
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
-## 🔐 預設後台
+## 🔐 認證和安全
+
+### 登入方式
 - **帳號**: admin
 - **密碼**: admin
 
-⚠️ **上線前請改密碼**
+### API 認證
+所有修改操作（新增、編輯、刪除商品和設置）需要 JWT 令牌：
+
+**登入取得令牌**
+```bash
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+# 回應
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": "24h"
+}
+```
+
+**使用令牌調用 API**
+```bash
+POST http://localhost:3001/api/products
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "新商品",
+  "price": 29.99
+}
+```
+
+### 安全特性
+✅ JWT 令牌認證  
+✅ 密碼雜湊存儲  
+✅ CORS 白名單控制  
+✅ 請求頻率限制  
+✅ 輸入驗證和淨化  
+✅ HTTP 日誌記錄  
+
+⚠️ **生產環境提醒**
+- 修改 `JWT_SECRET` 為強密碼
+- 更新管理員密碼
+- 限制 `ALLOWED_ORIGINS`
+- 啟用 HTTPS
 
 ## 📝 使用指南
 
@@ -270,9 +335,26 @@ NODE_ENV=development
 - [ ] **數據庫優化** - 索引優化、查詢性能監測
 
 ## ⚠️ 重要提醒
-- 不要在公開倉庫提交真實 API Key
-- 生產環境啟用 Supabase RLS
-- 建議使用更安全的登入方式（Supabase Auth）
+- 不要在公開倉庫提交 `.env` 文件（已在 `.gitignore` 中）
+- 不要在公開倉庫提交真實 API Key 或 JWT_SECRET
+- 生產環境請更改所有預設密碼
+- 定期審查和更新依賴版本
+- 監控和記錄 API 訪問日誌
+
+## 📚 API 文檔
+
+### 公開端點（無需認證）
+- `GET /api/products` - 獲取所有商品
+- `GET /api/products/:id` - 獲取單個商品
+- `GET /api/settings` - 獲取應用設置
+- `POST /api/auth/login` - 用戶登入
+
+### 受保護端點（需要 JWT 令牌）
+- `POST /api/products` - 建立商品
+- `PUT /api/products/:id` - 更新商品
+- `DELETE /api/products/:id` - 刪除商品
+- `POST /api/settings` - 更新設置
 
 ---
-**版本**: 1.0.0 | **更新**: 2026年4月17日
+**版本**: 1.0.1 | **更新**: 2026年4月17日  
+**最新改進**: JWT 認證系統、輸入驗證、安全加固
