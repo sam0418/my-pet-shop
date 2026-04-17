@@ -627,19 +627,26 @@
             };
 
             // 事件處理器
-            const handleLogin = () => {
-                if (validateLogin(loginForm.username, loginForm.password)) {
-                    view.value = VIEWS.ADMIN_DASHBOARD;
-                    isAdmin.value = true;
-                    resetLoginForm();
-                } else {
-                    showToast(t('loginError'), TOAST_TYPES.ERROR);
+            const handleLogin = async () => {
+                try {
+                    const success = await validateLogin(loginForm.username, loginForm.password);
+                    if (success) {
+                        view.value = VIEWS.ADMIN_DASHBOARD;
+                        isAdmin.value = true;
+                        resetLoginForm();
+                        showToast('Login successful', TOAST_TYPES.SUCCESS);
+                    } else {
+                        showToast(t('loginError'), TOAST_TYPES.ERROR);
+                    }
+                } catch (error) {
+                    showToast(error.message || 'Login failed', TOAST_TYPES.ERROR);
                 }
             };
 
             const handleLogout = () => {
                 logout();
                 view.value = VIEWS.HOME;
+                showToast('Logged out successfully', TOAST_TYPES.SUCCESS);
             };
 
             const handleAddToCart = (product) => {

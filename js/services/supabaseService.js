@@ -14,60 +14,101 @@ if (API_MODE === 'supabase' && window.supabase) {
 const BASE_URL = LOCAL_API_CONFIG.baseURL;
 
 /**
+ * 取得認證令牌
+ */
+const getAuthToken = () => {
+  return sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || '';
+};
+
+/**
+ * 取得認證 headers
+ */
+const getAuthHeaders = () => {
+  const token = getAuthToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
+
+/**
  * 本地 API 調用方法
  */
 const localAPI = {
   async fetchProducts() {
-    const response = await fetch(`${BASE_URL}/api/products`);
-    if (!response.ok) throw new Error('Failed to fetch products');
+    const response = await fetch(`${BASE_URL}/api/products`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch products');
+    }
     return await response.json();
   },
 
   async createProduct(payload) {
     const response = await fetch(`${BASE_URL}/api/products`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error('Failed to create product');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create product');
+    }
     return await response.json();
   },
 
   async updateProduct(id, payload) {
     const response = await fetch(`${BASE_URL}/api/products/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error('Failed to update product');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update product');
+    }
     return await response.json();
   },
 
   async deleteProduct(id) {
     const response = await fetch(`${BASE_URL}/api/products/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: getAuthHeaders()
     });
-    if (!response.ok) throw new Error('Failed to delete product');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete product');
+    }
     return await response.json();
   },
 
   async fetchSettings() {
-    const response = await fetch(`${BASE_URL}/api/settings`);
-    if (!response.ok) throw new Error('Failed to fetch settings');
+    const response = await fetch(`${BASE_URL}/api/settings`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch settings');
+    }
     return await response.json();
   },
 
   async updateSettings(settings) {
     const response = await fetch(`${BASE_URL}/api/settings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         shipping_fee: parseFloat(settings.shippingFee),
         free_shipping_threshold: parseFloat(settings.freeShippingThreshold),
         whatsapp_number: settings.whatsappNumber
       })
     });
-    if (!response.ok) throw new Error('Failed to update settings');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update settings');
+    }
     return await response.json();
   },
 
