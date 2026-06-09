@@ -3,7 +3,7 @@
 
 -- 商品表
 CREATE TABLE IF NOT EXISTS products (
-  id SERIAL PRIMARY KEY,
+  id SERIAL PRIMARY KEY, --unique product id
   name VARCHAR(255) NOT NULL UNIQUE,
   price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
   stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
@@ -24,13 +24,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 3. 顧客表 (新建立，符合 3NF 正規化)
+CREATE TABLE IF NOT EXISTS customers (
+  id SERIAL PRIMARY KEY, -- [PK] 顧客 ID
+  name VARCHAR(255) NOT NULL,
+  phone VARCHAR(20),
+  email VARCHAR(255) UNIQUE, -- 確保 Email 不重複
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 訂單表（新增，用於訂單歷史）
 CREATE TABLE IF NOT EXISTS orders (
   id SERIAL PRIMARY KEY,
   order_number VARCHAR(50) UNIQUE NOT NULL,
-  customer_name VARCHAR(255) NOT NULL,
-  customer_phone VARCHAR(20),
-  customer_email VARCHAR(255),
+  customer_id INTERGER NOT NULL, -- [FK] : to customers.id
   total_amount DECIMAL(10, 2) NOT NULL,
   items JSONB NOT NULL,
   status VARCHAR(20) DEFAULT 'pending',
